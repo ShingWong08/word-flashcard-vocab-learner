@@ -12,9 +12,6 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 dynamic = ["version", "description"]
-dependencies = [
-    "google-genai>=2.25.0",
-]
 
 [project.urls]
-Home = "https://github.com/ShingWong08/cityu-cs1302a-project"
+Home = "https://github.com/ShingWong08/word_flashcard_vocab_learner"
