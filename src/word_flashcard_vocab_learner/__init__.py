@@ -2,9 +2,10 @@
 
 __version__ = "0.1.1"
 
+
 def main() -> None:
-   print("Welcome to the Word Flashcard Vocab Learner!")
-   print("This packages help you to learn English vocabulary more easily!")
+    print("Welcome to the Word Flashcard Vocab Learner!")
+    print("This packages help you to learn English vocabulary more easily!")
 
 if __name__ == "__main__":
-   main()
+    main()
