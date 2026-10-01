@@ -1,8 +1,14 @@
 import requests
 
-def getWordDefinition(requiredWord: str, maxDefinitions: int = 3) -> dict:
 
-    URL = "https://freedictionaryapi.com/api/v1/entries/en/" + requiredWord + "?translations=true"
+def getWordDefinition(
+    requiredWord: str,
+    dictionaryURL: str = "https://freedictionaryapi.com/api/v1/entries/en/",
+    otherArguments: str = "?translations=true",
+    maxDefinitions: int = 3,
+) -> dict:
+
+    URL = dictionaryURL + requiredWord + otherArguments
 
     response = requests.get(URL).json()
 
@@ -22,10 +28,12 @@ def getWordDefinition(requiredWord: str, maxDefinitions: int = 3) -> dict:
                     if not translations and isChinese(eachTranslation):
                         translations.append(eachTranslation.get("word"))
 
-    definitionsFormatted = "\n".join(f"    - {eachDefinition}" for eachDefinition in definitions[:maxDefinitions])
-    translationsFormatted = "\n".join(f"    - {eachTranslation}" for eachTranslation in translations)
-
-
+    definitionsFormatted = "\n".join(
+        f"    - {eachDefinition}" for eachDefinition in definitions[:maxDefinitions]
+    )
+    translationsFormatted = "\n".join(
+        f"    - {eachTranslation}" for eachTranslation in translations
+    )
 
     return f"""
     Definitions of "{requiredWord}":
@@ -35,15 +43,16 @@ def getWordDefinition(requiredWord: str, maxDefinitions: int = 3) -> dict:
 {translationsFormatted}
     """
 
+
 def isChinese(translation: dict) -> bool:
     language = translation.get("language")
     code = language.get("code")
     name = language.get("name")
 
-    if (code == "zh" or "Chinese" in name):
+    if code == "zh" or "Chinese" in name:
         return True
-    
+
     return False
 
-print(getWordDefinition("road"))
 
+print(getWordDefinition("road"))
