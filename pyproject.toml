@@ -12,6 +12,43 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 dynamic = ["version", "description"]
+requires-python = ">=3.9"
+keywords = ["flashcard", "vocabulary", "english-learning", "education", "cli"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Education",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Education",
+]
+dependencies = [
+    "requests",
+    "openai",
+]
+
+[project.optional-dependencies]
+# Speech-to-text needs a microphone and the PortAudio system library.
+speech = [
+    "sounddevice",
+    "soundfile",
+    "elevenlabs",
+]
+dev = [
+    "pytest",
+]
+
+[project.scripts]
+word-flashcard = "word_flashcard_vocab_learner:main"
 
 [project.urls]
-Home = "https://github.com/ShingWong08/word_flashcard_vocab_learner"
+Home = "https://github.com/ShingWong08/word-flashcard-vocab-learner"
+Repository = "https://github.com/ShingWong08/word-flashcard-vocab-learner"
+Issues = "https://github.com/ShingWong08/word-flashcard-vocab-learner/issues"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
