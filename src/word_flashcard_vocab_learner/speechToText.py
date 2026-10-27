@@ -1,6 +1,7 @@
 import os
 import sounddevice
 import soundfile
+import pyperclip
 
 from datetime import datetime
 from elevenlabs.client import ElevenLabs
@@ -53,6 +54,16 @@ def speechToText(
 
     return transcription.text
 
+def editTranscription(transcription: str) -> str:
+    print("Transcription:", transcription)
+    isEdit = input("Would you like to edit the transcription? (Yes / No)")
+
+    if isEdit.lower() in ["yes", "y"]:
+        pyperclip.copy(transcription)
+        newTranscription = input("The transcription has been copied to your clipboard, please enter the new transcription: ")
+        return newTranscription
+    return transcription
 
 result = speechToText(getRecording(seconds = 5))
-print("Transcription result:", result)
+editedResult = editTranscription(result)
+print("Final Transcription:", editedResult)
