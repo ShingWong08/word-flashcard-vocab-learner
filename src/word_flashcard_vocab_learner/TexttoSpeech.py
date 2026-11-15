@@ -12,7 +12,8 @@ def text_to_speech(
   voice_id: str = "JBFqnCBsd6RMkjVDRZzb",
   model_id: str = "eleven_flash_v2_5",
   ouput_format: str = "mp3_22050_32",
-  auto_play: bool = True) -> str:
+  auto_play: bool = True,
+) -> str:
 
   if not text.strip():
     raise ValueError("Text cannot be none.")
