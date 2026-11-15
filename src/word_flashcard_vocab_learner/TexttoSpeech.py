@@ -1,47 +1,54 @@
 import os
 import uuid
-from pathlib import Path
+from datetime import datetime
 
-import sounddevice as sd
-import soundfile as sf
 from elevenlabs.client import ElevenLabs
+from elevenlabs.play import play
 
-audio_dir = Path("audio")
-
-def gererate_word_audio(
-  word: str,
-  *,
+def text_to_speech(
+  text: str,
+  ouput_file_name: str | None = None,
   api_key: str | None = None,
   voice_id: str = "JBFqnCBsd6RMkjVDRZzb",
   model_id: str = "eleven_flash_v2_5",
-  ouput_format: str = "mp3_22050_32",) -> Path:
+  ouput_format: str = "mp3_22050_32",
+  auto_play: bool = True) -> str:
+
+  if not text.strip():
+    raise ValueError("Text cannot be none.")
+    
   api_key = api_key or os.environ.get("ELEVENLABS_API_KEY")
   if not api_key:
-    raise ValueError("set the elevenlabs_api_key environment variable before generating audio.")
+    raise ValueError("Set the elevenlabs_api_key environment variable before generating audio.")
     
   client = ElevenLabs(api_key=api_key)
-  audio.dir.mkdir(parents = True, exist_ok = True)
-  audio_path = audio_dir / f"{uuid.uuid4()}.mp3"
+
+  print(f'The audio of {text} is generating.')
     
   audio_stream = client.text_to_speech.convert(
-    text = word,
+    text = text,
     voice_id = voice_id,
     model_id = model_id,
     output_format = output_format,)
+
+  os.makedirs("audio_cache", exist_ok = True)
+
+  if output_file_name is None:
+    timetamp = datetime.now().strftime("%Y-m-%d_%H-%M-%S")
+    unique-id = uuid.uuid4().hex[8]
+    output_file_name = f"speech_{timestamp}_{unique_id}.mp3"
+
+  file_path = os.path.join("audio_cache", output_file_name)
     
-  with audio_path.open("wb") as audio_file:
+  with open(file_path, "wb") as audio_file:
     for char in audio_stream:
-      if char:
         audio_file.write(char)
-        
-  return audio_path
-    
-def play_audio(audio_path: str | Path) -> None:
-  audio_path = Path(audio_path)
-  if not audio_path.exists():
-    raise FileNotFoundError(f"Audio file not found: {audio_path}")
-    
-  audio_data, sample_rate = sf.read(audio_path)
-  sd.play(audio_data, samplerate = sample_rate)
-  sd.wait()
-  
+
+  print(f"The audio is saved into {file_path}")
+
+  if auto_play:
+    play(file_path)
+  return file_path
+
+  if __name__ == "__main__":
+    text_to_speech("road")
