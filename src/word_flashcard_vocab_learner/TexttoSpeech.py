@@ -36,7 +36,7 @@ def text_to_speech(
 
   if output_file_name is None:
     timetamp = datetime.now().strftime("%Y-m-%d_%H-%M-%S")
-    unique-id = uuid.uuid4().hex[8]
+    unique_id = uuid.uuid4().hex[8]
     output_file_name = f"speech_{timestamp}_{unique_id}.mp3"
 
   file_path = os.path.join("audio_cache", output_file_name)
