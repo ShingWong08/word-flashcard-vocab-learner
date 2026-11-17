@@ -4,7 +4,7 @@ def connectGenAI(
     userMessaage: str,
 
     baseURL: str = "https://api.deepseek.com/chat/completions",
-    apiKey: str = "DEEPSEEK_API_KEY",
+    apiKey: str = os.getenv("LLM_API_KEY"),
     model: str = "deepseek-flash",
     systemMessage: str = "You are an AI assistant.",
     temperature: float = 1.0,
@@ -15,6 +15,10 @@ def connectGenAI(
 
 
 ) -> str:
+
+    """
+        Similar to connectGenAI, but uses 'requests' package to send the request to the GenAI API instead of the OpenAI package.
+    """
 
     headers = {
         "Content-Type": "application/json",
@@ -41,6 +45,3 @@ def connectGenAI(
     print(content)
 
     return content
-
-
-connectGenAI("Hello World!")
