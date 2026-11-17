@@ -7,11 +7,11 @@ from elevenlabs.play import play
 
 def text_to_speech(
   text: str,
-  ouput_file_name: str | None = None,
+  output_file_name: str | None = None,
   api_key: str | None = None,
   voice_id: str = "JBFqnCBsd6RMkjVDRZzb",
   model_id: str = "eleven_flash_v2_5",
-  ouput_format: str = "mp3_22050_32",
+  output_format: str = "mp3_22050_32",
   auto_play: bool = True,
 ) -> str:
 
@@ -20,7 +20,7 @@ def text_to_speech(
     
   api_key = api_key or os.environ.get("ELEVENLABS_API_KEY")
   if not api_key:
-    raise ValueError("Set the elevenlabs_api_key environment variable before generating audio.")
+    raise ValueError("Set the ELEVENLABS_API_KEY environment variable before generating audio.")
     
   client = ElevenLabs(api_key=api_key)
 
@@ -35,21 +35,23 @@ def text_to_speech(
   os.makedirs("audio_cache", exist_ok = True)
 
   if output_file_name is None:
-    timetamp = datetime.now().strftime("%Y-m-%d_%H-%M-%S")
-    unique_id = uuid.uuid4().hex[8]
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    unique_id = uuid.uuid4().hex[:8]
     output_file_name = f"speech_{timestamp}_{unique_id}.mp3"
 
   file_path = os.path.join("audio_cache", output_file_name)
     
   with open(file_path, "wb") as audio_file:
-    for char in audio_stream:
-        audio_file.write(char)
+    for c in audio_stream:
+        audio_file.write(c)
 
   print(f"The audio is saved into {file_path}")
 
   if auto_play:
-    play(file_path)
+    with open(file_path, "rb") as audio_file:
+      play(audio_file.read())
+      
   return file_path
 
-  if __name__ == "__main__":
-    text_to_speech("road")
+if __name__ == "__main__":
+  text_to_speech("road")
