@@ -3,7 +3,7 @@ requires = ["flit_core >=3.11,<5"]
 build-backend = "flit_core.buildapi"
 
 [project]
-name = "word_flashcard_vocab_learner"
+name = "word-flashcard-vocab-learner"
 authors = [
     {name = "Shing8981", email = "shingwong088@gmail.com"},
     {name = "Chaus9587", email = "chausandchaus@gmail.com"}
@@ -26,24 +26,35 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Education",
 ]
-dependencies = [
-    "requests",
-    "openai",
-]
+# Core is standard-library only: this is what keeps `pip install` conflict-free
+# on a shared JupyterHub image.
+dependencies = []
 
 [project.optional-dependencies]
-# Speech-to-text needs a microphone and the PortAudio system library.
-speech = [
+# Reading PDF / Word / Excel sources.
+scan = [
+    "pdfplumber>=0.10",
+    "python-docx>=1.1",
+    "openpyxl>=3.1",
+]
+# AI examples, definitions and translations (uses plain HTTP).
+ai = [
+    "requests>=2.31",
+]
+# Text-to-speech and speech-to-text (needs a microphone + PortAudio).
+audio = [
+    "elevenlabs>=1.0",
     "sounddevice",
     "soundfile",
-    "elevenlabs",
 ]
 dev = [
-    "pytest",
+    "pytest>=7",
+    "build",
+    "twine",
 ]
 
 [project.scripts]
-word-flashcard = "word_flashcard_vocab_learner:main"
+word-flashcard = "word_flashcard_vocab_learner.cli:main"
 
 [project.urls]
 Home = "https://github.com/ShingWong08/word-flashcard-vocab-learner"
