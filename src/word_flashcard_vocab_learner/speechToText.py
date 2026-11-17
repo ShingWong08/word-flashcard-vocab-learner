@@ -3,9 +3,9 @@ import sounddevice
 import soundfile
 import pyperclip
 
+
 from datetime import datetime
 from elevenlabs.client import ElevenLabs
-
 
 def getRecording(seconds: int, sampleRate: int = 16000) -> str:
 
@@ -103,3 +103,7 @@ def editTranscription(transcription: str) -> str:
         newTranscription = input("The transcription has been copied to your clipboard, please enter the new transcription: ")
         return newTranscription
     return transcription
+
+result = speechToText(getRecording(seconds = 5))
+editedResult = editTranscription(result)
+print("Final Transcription:", editedResult)

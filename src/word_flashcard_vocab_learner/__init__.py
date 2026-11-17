@@ -9,9 +9,11 @@ Public API::
 """
 
 from __future__ import annotations
-
+from dotenv import load_dotenv
 from .models import LEVEL_RANK, LEVELS, Card, Deck
 from .srs import interval_for, retention, review
+
+load_dotenv()
 
 __version__ = "0.2.0"
 
