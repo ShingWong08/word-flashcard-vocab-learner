@@ -5,7 +5,12 @@ import pyperclip
 
 
 from datetime import datetime
+from dotenv import find_dotenv, load_dotenv
 from elevenlabs.client import ElevenLabs
+
+
+load_dotenv(find_dotenv())
+
 
 def getRecording(seconds: int, sampleRate: int = 16000) -> str:
 
@@ -43,7 +48,7 @@ def getRecording(seconds: int, sampleRate: int = 16000) -> str:
 
 def speechToText(
     audioFile: str,
-    apiKey: str = os.getenv("ELEVENLABS_API_KEY"),
+    apiKey: str | None = None,
     modelID: str = "scribe_v2",
     languageCode: str = "eng",
 ) -> str:
@@ -63,7 +68,14 @@ def speechToText(
             - languageCode: "eng"
     """
 
-    client = ElevenLabs(api_key = apiKey)
+    resolvedApiKey = apiKey or os.environ.get("ELEVENLABS_API_KEY")
+    if not resolvedApiKey:
+        raise RuntimeError(
+            "ELEVENLABS_API_KEY is not configured. "
+            "Set it in .env or pass apiKey explicitly."
+        )
+
+    client = ElevenLabs(api_key=resolvedApiKey)
 
     with open(audioFile, "rb") as audio:
 
@@ -104,6 +116,7 @@ def editTranscription(transcription: str) -> str:
         return newTranscription
     return transcription
 
-result = speechToText(getRecording(seconds = 5))
-editedResult = editTranscription(result)
-print("Final Transcription:", editedResult)
+if __name__ == "__main__":
+    result = speechToText(getRecording(seconds=5))
+    editedResult = editTranscription(result)
+    print("Final Transcription:", editedResult)

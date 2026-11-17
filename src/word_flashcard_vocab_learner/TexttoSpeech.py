@@ -4,12 +4,16 @@ import uuid
 from datetime import datetime
 from elevenlabs.client import ElevenLabs
 from elevenlabs.play import play
+from dotenv import find_dotenv, load_dotenv
+
+
+load_dotenv(find_dotenv())
 
 
 def textToSpeech(
     requiredText: str,
     outputFileName: str | None = None,
-    apiKey: str = "ELEVENLABS_API_KEY",
+    apiKey: str | None = None,
     voiceID: str = "JBFqnCBsd6RMkjVDRZzb",
     modelID: str = "eleven_flash_v2_5",
     outputFormat: str = "mp3_22050_32",
@@ -41,8 +45,14 @@ def textToSpeech(
     if not requiredText or not requiredText.strip():
         raise ValueError("Text cannot be empty or None.")
 
-    resolvedApiKey = os.environ.get(apiKey, apiKey)
-    client = ElevenLabs(api_key = resolvedApiKey)
+    resolvedApiKey = apiKey or os.environ.get("ELEVENLABS_API_KEY")
+    if not resolvedApiKey:
+        raise RuntimeError(
+            "ELEVENLABS_API_KEY is not configured. "
+            "Set it in .env or pass apiKey explicitly."
+        )
+
+    client = ElevenLabs(api_key=resolvedApiKey)
 
     print(f"The audio of '{requiredText}' is generating...")
 

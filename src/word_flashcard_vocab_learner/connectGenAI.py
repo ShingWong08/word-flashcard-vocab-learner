@@ -1,11 +1,18 @@
+import os
+
+from dotenv import find_dotenv, load_dotenv
 from openai import OpenAI
+
+
+load_dotenv(find_dotenv())
+
 
 def connectGenAI(
         
     userMessaage: str,
 
     baseURL: str = "https://integrate.api.nvidia.com/v1",
-    apiKey: str = os.getenv("LLM_API_KEY"),
+    apiKey: str | None = None,
     model: str = "deepseek-ai/deepseek-v4.1-flash",
     systemMessage: str = "You are an AI assistant.",
     temperature: float = 1.0,
@@ -42,7 +49,14 @@ def connectGenAI(
     """
 
     
-    client = OpenAI(base_url = baseURL, api_key = apiKey)
+    resolvedApiKey = apiKey or os.environ.get("LLM_API_KEY")
+    if not resolvedApiKey:
+        raise RuntimeError(
+            "LLM_API_KEY is not configured. "
+            "Set it in .env or pass apiKey explicitly."
+        )
+
+    client = OpenAI(base_url=baseURL, api_key=resolvedApiKey)
 
     response = client.chat.completions.create(
         model = model,
