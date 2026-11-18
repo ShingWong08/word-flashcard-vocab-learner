@@ -1,12 +1,27 @@
 import requests
 
-
 def getWordDefinition(
     requiredWord: str,
     dictionaryURL: str = "https://freedictionaryapi.com/api/v1/entries/en/",
     otherArguments: str = "?translations=true",
     maxDefinitions: int = 3,
 ) -> dict:
+
+    """
+    Fetches the definition and translation of a word from the Free Dictionary API.
+    Parameters:
+        Mandatory:
+            - requiredWord (str): The word for which the definition and translation are to be fetched.
+        Optional:
+            - dictionaryURL (str): The base URL of the Free Dictionary API.
+            - otherArguments (str): Additional query parameters for the API request.
+            - maxDefinitions (int): Maximum number of definitions to return.
+        Default:
+            - dictionaryURL: "https://freedictionaryapi.com/api/v1/entries/en/"
+            - otherArguments: "?translations=true"
+            - maxDefinitions: 3
+    """
+
 
     URL = dictionaryURL + requiredWord + otherArguments
 
@@ -54,5 +69,3 @@ def isChinese(translation: dict) -> bool:
 
     return False
 
-
-print(getWordDefinition("road"))

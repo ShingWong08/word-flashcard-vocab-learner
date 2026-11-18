@@ -1,4 +1,9 @@
 class ChatColor:
+
+    """
+    A class that defines ANSI escape codes for various text colors and formatting in the terminal.
+    """
+
     # Dark colors
     DARK_BLACK = "\033[30m"
     DARK_RED = "\033[31m"

@@ -6,37 +6,48 @@ build-backend = "flit_core.buildapi"
 name = "word_flashcard_vocab_learner"
 authors = [
     {name = "Shing8981", email = "shingwong088@gmail.com"},
-    {name = "Chaus9587", email = "chausandchaus@gmail.com"}
+    {name = "Chaus9587", email = "chausandchaus@gmail.com"},
+    {name = "KristyChong"},
+    {name = "AndyTLY"},
 ]
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
+
+# version 和 description 由 flit 從 __init__.py 的 __version__ 和 docstring 讀取
 dynamic = ["version", "description"]
-requires-python = ">=3.9"
+
+# 程式碼使用了 `str | None` 寫法，最低需要 Python 3.10
+requires-python = ">=3.10"
 keywords = ["flashcard", "vocabulary", "english-learning", "education", "cli"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Education",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Topic :: Education",
 ]
+
 dependencies = [
-    "requests",
-    "openai",
+    "requests",        # connectFreeDictionaryAPI、ConnectGenAIRequest
+    "openai",          # connectGenAI
+    "python-dotenv",   # 從 .env 讀取 API key
 ]
 
 [project.optional-dependencies]
-# Speech-to-text needs a microphone and the PortAudio system library.
+# 語音功能（ElevenLabs 語音轉文字 / 文字轉語音）
+# 錄音需要 PortAudio 系統庫；自動播放音頻需要安裝 ffmpeg（ffplay）
 speech = [
+    "elevenlabs",
     "sounddevice",
     "soundfile",
-    "elevenlabs",
+    "pyperclip",
 ]
 dev = [
     "pytest",
