@@ -21,23 +21,23 @@ def connectGenAIRequest(
 ) -> str:
 
     """
-    Similar to connectGenAI, but calls the DeepSeek API directly with the 'requests' package
+    Similar to connectGenAI, but calls the LLM API directly with the 'requests' package
     instead of the OpenAI package.
 
     Parameters:
         Mandatory:
             - userMessage (str): The message to send to the AI model.
         Optional:
-            - apiKey (str): DeepSeek API key. Falls back to the DEEPSEEK_API_KEY environment variable.
+            - apiKey (str): LLM API key. Falls back to the LLM_API_KEY environment variable.
             - Other parameters: same meaning as in connectGenAI.
             - reasoningEffort (str): Reasoning effort hint for the model.
             - timeout (float): Request timeout in seconds.
     """
 
-    resolvedApiKey = apiKey or os.environ.get("DEEPSEEK_API_KEY")
+    resolvedApiKey = apiKey or os.environ.get("LLM_API_KEY")
     if not resolvedApiKey:
         raise RuntimeError(
-            "DEEPSEEK_API_KEY is not configured. "
+            "LLM_API_KEY is not configured. "
             "Set it in .env or pass apiKey explicitly."
         )
 

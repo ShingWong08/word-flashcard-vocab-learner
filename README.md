@@ -26,8 +26,7 @@ Copy `.env.example` to `.env` and fill in the keys you need. `.env` is git-ignor
 
 | Variable | Used by |
 | --- | --- |
-| `NVIDIA_API_KEY` | `connectGenAI` (NVIDIA API) |
-| `DEEPSEEK_API_KEY` | `connectGenAIRequest` (DeepSeek API) |
+| `LLM_API_KEY` | `connectGenAI`, `connectGenAIRequest` (key for the LLM provider set by `baseURL`) |
 | `ELEVENLABS_API_KEY` | `speechToText`, `textToSpeech` |
 
 The dictionary lookup uses the free [Free Dictionary API](https://freedictionaryapi.com/) and needs no key.

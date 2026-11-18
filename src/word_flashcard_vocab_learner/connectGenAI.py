@@ -20,14 +20,14 @@ def connectGenAI(
 ) -> str:
 
     """
-    Connect to the AI model (NVIDIA API, via the OpenAI package) and return the generated response.
+    Connect to an OpenAI-compatible LLM API (via the OpenAI package) and return the generated response.
 
     Parameters:
         Mandatory:
             - userMessage (str): The message to send to the AI model.
         Optional:
             - baseURL (str): LLM API base URL.
-            - apiKey (str): NVIDIA API key. Falls back to the NVIDIA_API_KEY environment variable.
+            - apiKey (str): LLM API key. Falls back to the LLM_API_KEY environment variable.
             - model (str): The model to use for generating responses.
             - systemMessage (str): The system message to set the context for the AI model.
             - temperature (float): Sampling temperature for response generation.
@@ -35,7 +35,7 @@ def connectGenAI(
             - maxTokens (int): Maximum number of tokens to generate in the response.
         Default:
             - baseURL: "https://integrate.api.nvidia.com/v1"
-            - apiKey: NVIDIA_API_KEY from .env
+            - apiKey: LLM_API_KEY from .env
             - model: "deepseek-ai/deepseek-v4.1-flash"
             - systemMessage: "You are an AI assistant."
             - temperature: 1.0
@@ -43,10 +43,10 @@ def connectGenAI(
             - maxTokens: 2000
     """
 
-    resolvedApiKey = apiKey or os.environ.get("NVIDIA_API_KEY")
+    resolvedApiKey = apiKey or os.environ.get("LLM_API_KEY")
     if not resolvedApiKey:
         raise RuntimeError(
-            "NVIDIA_API_KEY is not configured. "
+            "LLM_API_KEY is not configured. "
             "Set it in .env or pass apiKey explicitly."
         )
 
