@@ -49,6 +49,17 @@ speech = [
     "soundfile",
     "pyperclip",
 ]
+# 從 PDF 和 Word（.docx）文件導入生字
+documents = [
+    "pypdf",
+    "python-docx",
+]
+# 從相片 / 掃描文件導入生字（OCR）；需要另外安裝 Tesseract OCR 程式
+ocr = [
+    "pytesseract",
+    "Pillow",
+    "pypdfium2",
+]
 dev = [
     "pytest",
 ]

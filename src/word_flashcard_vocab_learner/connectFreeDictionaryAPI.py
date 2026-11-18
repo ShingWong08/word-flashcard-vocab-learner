@@ -2,6 +2,7 @@ from urllib.parse import quote
 
 import requests
 
+from word_flashcard_vocab_learner import terminalDisplay
 from word_flashcard_vocab_learner.chatColor import ChatColor
 
 
@@ -140,6 +141,16 @@ def formatWordDefinition(result: dict) -> str:
 
     """
     Format the dict returned by getWordDefinition into readable text.
+    Definitions are numbered, long lines are wrapped to the screen width,
+    and a blank line separates each definition (with its examples) from the next.
+
+    Example:
+        Definitions of "cat":
+
+          1. A small domesticated carnivorous mammal.
+             > The cat sat on the mat.
+
+          2. A person.
     """
 
     word = result["word"]
@@ -152,29 +163,29 @@ def formatWordDefinition(result: dict) -> str:
     titleStart = ChatColor.paint("Definitions of ", ChatColor.BOLD)
     titleWord = ChatColor.paint(f'"{word}"', ChatColor.BOLD, ChatColor.VIOLET)
     titleEnd = ChatColor.paint(":", ChatColor.BOLD)
-    bullet = ChatColor.paint("  - ", ChatColor.DARK_GRAY)
-    examplePrefix = ChatColor.paint("    > ", ChatColor.DARK_GRAY)
 
     lines = [titleStart + titleWord + titleEnd]
 
     for index, eachDefinition in enumerate(definitions):
-        lines.append(bullet + eachDefinition)
+        number = f"  {index + 1}. "
+        exampleIndent = " " * len(number)
+
+        lines.append("")
+        lines.append(terminalDisplay.wrapParagraph(eachDefinition, number, prefixStyles=(ChatColor.DARK_GRAY,)))
 
         for eachExample in examples[index]:
-            lines.append(examplePrefix + ChatColor.paint(eachExample, ChatColor.AQUA))
+            lines.append(terminalDisplay.wrapParagraph(
+                eachExample,
+                exampleIndent + "> ",
+                prefixStyles=(ChatColor.DARK_GRAY,),
+                textStyles=(ChatColor.AQUA,),
+            ))
 
     return "\n".join(lines)
 
-
-def lookupAndFormat(word: str) -> str:
-
-    """
-    Look up a word and return its definitions as readable text.
-    Shortcut for formatWordDefinition(getWordDefinition(word)).
-    """
-
+def sendWordDefinition(word: str):
     return formatWordDefinition(getWordDefinition(word))
 
 
 if __name__ == "__main__":
-    print(lookupAndFormat("banana"))
+    print(sendWordDefinition("banana"))

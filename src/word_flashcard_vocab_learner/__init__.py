@@ -3,70 +3,165 @@
 __version__ = "0.1.2"
 
 import os
+from datetime import date
 
 import requests
+from dotenv import find_dotenv, load_dotenv
 
-from word_flashcard_vocab_learner import connectFreeDictionaryAPI
+from word_flashcard_vocab_learner import (
+    cardDeck,
+    connectFreeDictionaryAPI,
+    exportDeckToCSV,
+    genAITutor,
+    importVocabulary,
+    leitnerScheduler,
+    removeWords,
+    reviewCards,
+    showProgress,
+    speechHelper,
+    terminalDisplay,
+)
 from word_flashcard_vocab_learner.chatColor import ChatColor
+from word_flashcard_vocab_learner.flashCard import Card
+from word_flashcard_vocab_learner.terminalDisplay import plural
+from word_flashcard_vocab_learner.userInput import ask, askYesNo, isQuit
+
+# Load API keys from .env once, when the package is imported.
+load_dotenv(find_dotenv(usecwd=True))
 
 
-QUIT_COMMANDS = ["q", "quit", "exit"]
-YES_ANSWERS = ["y", "yes"]
+CLEAR_COMMANDS = ["c", "clear", "cls"]
+MAX_DECK_WORD_WIDTH = 24
 
 
-def main() -> None:
+def main(deckPath: str | None = None) -> None:
 
     """
-    Run the interactive word lookup: ask for a word, show its definitions,
-    and repeat until the user quits.
+    Run the flashcard app: show the main menu and repeat until the user quits.
+    Parameters:
+        Optional:
+            - deckPath (str | None): Where the deck is saved. Default is cardDeck.defaultDeckPath().
     """
 
-    printWelcome()
+    if deckPath is None:
+        deckPath = cardDeck.defaultDeckPath()
 
-    while True:
-        word = askForWord()
+    try:
+        cards = cardDeck.loadDeck(deckPath)
+    except ValueError as error:
+        print(ChatColor.paint(str(error), ChatColor.RED))
+        print(ChatColor.paint("Fix or move the file, then start again. Nothing was changed.", ChatColor.ORANGE))
+        return
 
-        if word is None:
-            break
+    printWelcome(cards)
 
-        if word.lower() in QUIT_COMMANDS:
-            break
+    actions = {
+        "1": lookUpWords,
+        "2": startReview,
+        "3": importVocabulary.importVocabulary,
+        "4": showDeck,
+        "5": lambda cards, deckPath: showProgress.showProgress(cards),
+        "6": exportDeck,
+        "7": removeWords.removeWords,
+    }
 
-        if word == "":
-            continue
+    try:
+        while True:
+            choice = askMenuChoice(cards)
 
-        showDefinitions(word)
+            if isQuit(choice):
+                break
+
+            if choice.lower() in CLEAR_COMMANDS:
+                terminalDisplay.clearScreen()
+                continue
+
+            if choice in actions:
+                print()
+                actions[choice](cards, deckPath)
+            elif choice != "":
+                print(ChatColor.paint("Please choose 1 - 7, c or q.", ChatColor.ORANGE))
+
+    except KeyboardInterrupt:
         print()
 
+    print()
     print(ChatColor.paint("Goodbye!", ChatColor.BOLD, ChatColor.CYAN))
 
 
-def printWelcome() -> None:
+def printWelcome(cards: list[Card]) -> None:
+    print()
     print(ChatColor.paint("Welcome to the Word Flashcard Vocab Learner!", ChatColor.BOLD, ChatColor.CYAN))
     print("This package helps you learn English vocabulary more easily!")
-    print(ChatColor.paint("Type an English word to look it up, or 'q' to quit.\n", ChatColor.DARK_GRAY))
+    print()
+
+    dueCount = len(cardDeck.getDueCards(cards, date.today()))
+    print(ChatColor.paint(f"Your deck has {plural(len(cards), 'word')}, {dueCount} due for review today.", ChatColor.DARK_GRAY))
 
 
-def askForWord() -> str | None:
+def askMenuChoice(cards: list[Card]) -> str | None:
 
     """
-    Ask the user for a word. Returns None if the user presses Ctrl+C or Ctrl+Z / Ctrl+D.
+    Print the main menu and return the user's choice.
     """
 
-    try:
-        answer = input(ChatColor.paint("Word: ", ChatColor.BOLD, ChatColor.YELLOW))
-    except (EOFError, KeyboardInterrupt):
+    dueCount = len(cardDeck.getDueCards(cards, date.today()))
+    reviewLabel = "Review cards"
+    if dueCount > 0:
+        reviewLabel += ChatColor.paint(f"  ({dueCount} due)", ChatColor.ORANGE)
+
+    options = [
+        ("1", "Look up and add words"),
+        ("2", reviewLabel),
+        ("3", "Import words from a file (PDF, Word, scan, text)"),
+        ("4", "View my deck"),
+        ("5", "Progress"),
+        ("6", "Export deck to CSV"),
+        ("7", "Remove words"),
+        ("", ""),
+        ("c", "Clear the screen"),
+        ("q", "Quit"),
+    ]
+
+    terminalDisplay.printHeading("Main menu")
+
+    for key, label in options:
+        if key == "":
+            print()
+        else:
+            print(ChatColor.paint(f"  {key}. ", ChatColor.BOLD) + label)
+
+    print()
+    return ask("Choose: ", ChatColor.BOLD, ChatColor.YELLOW)
+
+
+# ---------- 1. Look up and add words ----------
+
+def lookUpWords(cards: list[Card], deckPath: str) -> None:
+
+    """
+    Look up words one after another. An empty line or 'q' goes back to the menu.
+    """
+
+    print(ChatColor.paint("Type an English word to look it up. Press Enter on an empty line to go back.", ChatColor.DARK_GRAY))
+
+    while True:
         print()
-        return None
+        word = ask("Word: ", ChatColor.BOLD, ChatColor.YELLOW)
 
-    return answer.strip()
+        if isQuit(word) or word == "":
+            return
+
+        print()
+        showDefinitions(word, cards, deckPath)
 
 
-def showDefinitions(word: str) -> None:
+def showDefinitions(word: str, cards: list[Card], deckPath: str) -> None:
 
     """
     Look up the word and print its definitions.
-    If the word was found and speech is set up, offer to play its pronunciation.
+    If it was found: show the Chinese translation (AI tutor), offer the pronunciation (speech),
+    and offer to add it to the deck.
     """
 
     try:
@@ -77,11 +172,40 @@ def showDefinitions(word: str) -> None:
 
     print(connectFreeDictionaryAPI.formatWordDefinition(result))
 
-    wordWasFound = len(result["definitions"]) > 0
-    speechIsSetUp = bool(os.environ.get("ELEVENLABS_API_KEY"))
+    if len(result["definitions"]) == 0:
+        return
 
-    if wordWasFound and speechIsSetUp:
+    translation = lookUpTranslation(result)
+    if translation != "":
+        print()
+        print(ChatColor.paint("  Chinese: ", ChatColor.DARK_GRAY) + ChatColor.paint(translation, ChatColor.GREEN))
+
+    print()
+
+    if speechHelper.isSpeechAvailable():
         offerPronunciation(result["word"])
+
+    offerToAdd(result, translation, cards, deckPath)
+
+
+def lookUpTranslation(result: dict) -> str:
+
+    """
+    Get the Chinese translation from the AI tutor. Returns "" if the AI tutor is not set up or fails.
+    """
+
+    if not genAITutor.isAIAvailable():
+        return ""
+
+    firstDefinition = ""
+    if len(result["definitions"]) > 0:
+        firstDefinition = result["definitions"][0]
+
+    try:
+        return genAITutor.translateWord(result["word"], firstDefinition)
+    except Exception as error:
+        print(ChatColor.paint(f"Could not get the Chinese translation: {error}", ChatColor.ORANGE))
+        return ""
 
 
 def offerPronunciation(word: str) -> None:
@@ -90,21 +214,217 @@ def offerPronunciation(word: str) -> None:
     Ask whether to play the word's pronunciation, and play it if the user says yes.
     """
 
-    answer = input(ChatColor.paint("Play pronunciation? (y/N) ", ChatColor.YELLOW))
-
-    if answer.strip().lower() not in YES_ANSWERS:
+    if not askYesNo("Play pronunciation? (y/N) ", default=False):
         return
 
     try:
-        from word_flashcard_vocab_learner.textToSpeech import textToSpeech
-    except ImportError:
-        print(ChatColor.paint("Speech support is not installed. Run: pip install .[speech]", ChatColor.ORANGE))
-        return
-
-    try:
-        textToSpeech(word)
+        speechHelper.pronounce(word)
     except Exception as error:
         print(ChatColor.paint(f"Could not play pronunciation: {error}", ChatColor.RED))
+
+
+def offerToAdd(result: dict, translation: str, cards: list[Card], deckPath: str) -> None:
+
+    """
+    Ask whether to add the word to the deck, unless it is already there.
+    """
+
+    existingCard = cardDeck.findCard(cards, result["word"])
+    if existingCard is not None:
+        print(ChatColor.paint(f'"{existingCard.word}" is already in your deck (box {existingCard.box}).', ChatColor.DARK_GRAY))
+        return
+
+    if not askYesNo("Add to your deck? (y/N) ", default=False):
+        return
+
+    cardDeck.addCard(cards, Card.fromLookup(result, translation))
+    cardDeck.saveDeck(cards, deckPath)
+    print(ChatColor.paint(f'Added "{result["word"]}" to your deck ({plural(len(cards), "word")}).', ChatColor.GREEN))
+
+
+# ---------- 2. Review cards ----------
+
+def startReview(cards: list[Card], deckPath: str) -> None:
+
+    """
+    Review the cards that are due today. If none are due, offer extra practice
+    with all cards (extra practice does not change boxes or review dates).
+    """
+
+    if len(cards) == 0:
+        print(ChatColor.paint("Your deck is empty. Look up some words and add them first.", ChatColor.ORANGE))
+        return
+
+    today = date.today()
+    cardsToReview = cardDeck.getDueCards(cards, today)
+    updateSchedule = True
+
+    if len(cardsToReview) == 0:
+        print(ChatColor.paint(f"No cards are due today. Next review: {cardDeck.nextDueDate(cards)}.", ChatColor.GREEN))
+        print()
+
+        if not askYesNo("Practise all cards anyway? Your progress will not change. (y/N) ", default=False):
+            return
+
+        cardsToReview = list(cards)
+        updateSchedule = False
+    else:
+        print(ChatColor.paint(f"Due today: {plural(len(cardsToReview), 'card')}.", ChatColor.CYAN))
+
+    print()
+    mode = askReviewMode()
+    if mode is None:
+        return
+
+    def saveProgress() -> None:
+        cardDeck.saveDeck(cards, deckPath)
+
+    summary = reviewCards.reviewCards(cardsToReview, mode, saveProgress=saveProgress, today=today, updateSchedule=updateSchedule)
+    printSummary(summary)
+
+
+def askReviewMode() -> str | None:
+
+    """
+    Let the user choose a review mode. Returns None to go back to the menu.
+    """
+
+    modes = reviewCards.availableModes()
+    nameWidth = max(len(reviewCards.MODE_NAMES[eachMode]) for eachMode in reviewCards.MODE_NAMES)
+
+    print(ChatColor.paint("Review modes:", ChatColor.BOLD))
+    print()
+
+    for index, eachMode in enumerate(modes, start=1):
+        name = ChatColor.paint(f"{reviewCards.MODE_NAMES[eachMode]:<{nameWidth}}", ChatColor.BOLD)
+        description = ChatColor.paint(reviewCards.MODE_DESCRIPTIONS[eachMode], ChatColor.DARK_GRAY)
+        print(f"  {index}. {name}   {description}")
+
+    missingModes = []
+    if not speechHelper.isSpeechAvailable():
+        missingModes.append('Listening, Speaking: set ELEVENLABS_API_KEY and run  pip install ".[speech]"')
+    if not genAITutor.isAIAvailable():
+        missingModes.append("Sentence: set LLM_API_KEY")
+
+    if len(missingModes) > 0:
+        print()
+        print(ChatColor.paint("  More modes:", ChatColor.DARK_GRAY))
+        for eachNote in missingModes:
+            print(terminalDisplay.wrapParagraph(eachNote, "    - ", prefixStyles=(ChatColor.DARK_GRAY,), textStyles=(ChatColor.DARK_GRAY,)))
+
+    print()
+
+    while True:
+        choice = ask("Choose a mode (Enter = 1, q = back): ", ChatColor.YELLOW)
+
+        if isQuit(choice):
+            return None
+
+        if choice == "":
+            return modes[0]
+
+        if choice.isdigit() and 1 <= int(choice) <= len(modes):
+            return modes[int(choice) - 1]
+
+        print(ChatColor.paint(f"Please choose a number from 1 to {len(modes)}.", ChatColor.ORANGE))
+
+
+def printSummary(summary: dict) -> None:
+
+    reviewed = summary["reviewed"]
+
+    terminalDisplay.printHeading("Session finished")
+
+    if reviewed == 0:
+        print(ChatColor.paint("  No cards reviewed.", ChatColor.DARK_GRAY))
+        return
+
+    correct = summary["correct"]
+    percent = round(correct * 100 / reviewed)
+
+    labelWidth = 8
+    print(terminalDisplay.labelLine("Reviewed", plural(reviewed, "card"), labelWidth))
+    print(terminalDisplay.labelLine("Correct", ChatColor.paint(correct, ChatColor.GREEN), labelWidth))
+    print(terminalDisplay.labelLine("Wrong", ChatColor.paint(summary["wrong"], ChatColor.RED), labelWidth))
+    print(terminalDisplay.labelLine("Score", f"{percent}%", labelWidth))
+
+
+# ---------- 4. View my deck ----------
+
+def showDeck(cards: list[Card], deckPath: str) -> None:
+
+    """
+    List every card with its box, next review date, score and translation.
+    """
+
+    if len(cards) == 0:
+        print(ChatColor.paint("Your deck is empty. Look up some words and add them first.", ChatColor.ORANGE))
+        return
+
+    today = date.today()
+    dueCount = len(cardDeck.getDueCards(cards, today))
+
+    terminalDisplay.printHeading(f"Your deck: {plural(len(cards), 'word')}, {dueCount} due today")
+
+    longestWord = max(len(eachCard.word) for eachCard in cards)
+    wordWidth = min(max(longestWord, len("Word")), MAX_DECK_WORD_WIDTH)
+    numberWidth = max(len(str(len(cards))), 1)
+
+    # The numbers are the same as on the "Remove words" screen.
+    header = f"  {'#':>{numberWidth}}  {'Word':<{wordWidth}}  Box  {'Next review':<11}  Score  Chinese"
+    print(ChatColor.paint(header, ChatColor.BOLD))
+    print(ChatColor.paint("  " + "─" * (len(header) - 2), ChatColor.DARK_GRAY))
+
+    for index, eachCard in enumerate(cardDeck.sortByWord(cards), start=1):
+        if leitnerScheduler.isDue(eachCard, today):
+            nextReview = ChatColor.paint(f"{'due now':<11}", ChatColor.ORANGE)
+        else:
+            nextReview = f"{eachCard.nextReview:<11}"
+
+        number = ChatColor.paint(f"{index:>{numberWidth}}", ChatColor.DARK_GRAY)
+        score = f"{eachCard.correctCount}/{eachCard.timesReviewed()}"
+        row = f"  {number}  {eachCard.word:<{wordWidth}}  {eachCard.box:>3}  {nextReview}  {score:>5}  {eachCard.translation}"
+        print(row)
+
+    print()
+    print(ChatColor.paint(f"  Saved in: {deckPath}", ChatColor.DARK_GRAY))
+
+
+# ---------- 6. Export deck to CSV ----------
+
+def exportDeck(cards: list[Card], deckPath: str) -> None:
+
+    """
+    Save the deck as a CSV file for Excel, Google Sheets, Quizlet or Anki.
+    """
+
+    if len(cards) == 0:
+        print(ChatColor.paint("Your deck is empty, so there is nothing to export.", ChatColor.ORANGE))
+        return
+
+    answer = ask(f"Save as (Enter = {exportDeckToCSV.DEFAULT_EXPORT_FILE}, q = back): ", ChatColor.YELLOW)
+    if isQuit(answer):
+        return
+
+    path = importVocabulary.cleanPath(answer) if answer != "" else exportDeckToCSV.DEFAULT_EXPORT_FILE
+
+    if os.path.isdir(path):
+        path = os.path.join(path, exportDeckToCSV.DEFAULT_EXPORT_FILE)
+
+    if os.path.splitext(path)[1] == "":
+        path += ".csv"
+
+    if os.path.exists(path):
+        if not askYesNo(f"{path} already exists. Replace it? (y/N) ", default=False):
+            return
+
+    try:
+        count = exportDeckToCSV.exportDeckToCSV(cards, path)
+    except OSError as error:
+        print(ChatColor.paint(f"Could not save the file: {error}", ChatColor.RED))
+        return
+
+    print(ChatColor.paint(f"Exported {plural(count, 'word')} to {os.path.abspath(path)}", ChatColor.GREEN))
 
 
 if __name__ == "__main__":

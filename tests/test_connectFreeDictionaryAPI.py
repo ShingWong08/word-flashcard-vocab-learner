@@ -137,8 +137,22 @@ def test_format_word_definition_with_examples():
 
     assert text == "\n".join([
         'Definitions of "cat":',
-        "  - a small animal",
-        "    > The cat sat on the mat.",
-        "    > I have two cats.",
-        "  - a person",
+        "",
+        "  1. a small animal",
+        "     > The cat sat on the mat.",
+        "     > I have two cats.",
+        "",
+        "  2. a person",
     ])
+
+
+def test_format_word_definition_wraps_long_lines(monkeypatch):
+    monkeypatch.setenv("COLUMNS", "40")
+    longDefinition = "The elongated curved tropical fruit of a banana plant, which grows in bunches."
+
+    text = dictionary.formatWordDefinition({"word": "banana", "definitions": [longDefinition], "examples": [[]]})
+    lines = text.splitlines()
+
+    assert lines[2] == "  1. The elongated curved tropical fruit"
+    assert lines[3].startswith("     of a banana plant")
+    assert all(len(eachLine) <= 40 for eachLine in lines)
