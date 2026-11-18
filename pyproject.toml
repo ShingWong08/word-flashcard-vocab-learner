@@ -35,7 +35,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "requests",        # connectFreeDictionaryAPI、ConnectGenAIRequest
+    "requests",        # connectFreeDictionaryAPI、connectGenAIRequest
     "openai",          # connectGenAI
     "python-dotenv",   # 從 .env 讀取 API key
 ]
@@ -63,3 +63,4 @@ Issues = "https://github.com/ShingWong08/word-flashcard-vocab-learner/issues"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]

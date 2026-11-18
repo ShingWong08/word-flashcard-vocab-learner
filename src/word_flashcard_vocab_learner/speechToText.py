@@ -7,10 +7,10 @@ from datetime import datetime
 from dotenv import find_dotenv, load_dotenv
 from elevenlabs.client import ElevenLabs
 
-load_dotenv(find_dotenv())
+load_dotenv(find_dotenv(usecwd=True))
 
 
-def getRecording(seconds: int, sampleRate: int = 16000) -> str:
+def getRecording(seconds: int, sampleRate: int = 16000, outputDir: str = "recording") -> str:
 
     """
     Record audio from the microphone for a specified duration and save it as a WAV file.
@@ -18,37 +18,40 @@ def getRecording(seconds: int, sampleRate: int = 16000) -> str:
         Mandatory:
             - seconds (int): Duration of the recording in seconds.
         Optional:
-            - sampleRate (int): Sampling rate for the recording. Default is 16000 Hz.
+            - sampleRate (int): Sampling rate for the recording.
+            - outputDir (str): Folder to save the recording in (relative to the current working directory).
         Default:
             - sampleRate: 16000 Hz
+            - outputDir: "recording"
+    Returns:
+        str: Path of the saved WAV file.
     """
 
-
-    print("Please record your audio. Press Enter when done.")
+    print(f"Please record your audio. This will record for {seconds} seconds.")
     input("Press Enter to start recording...")
 
     recording = sounddevice.rec(
         int(seconds * sampleRate), samplerate=sampleRate, channels=1, blocking=True
     )
 
-    print("Recording complete. Saving to 'recording.wav'...")
-
-    os.makedirs("recording", exist_ok=True)
+    os.makedirs(outputDir, exist_ok=True)
 
     currentTime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    fileName = currentTime + ".wav"
-    soundfile.write("recording/" + fileName, recording, sampleRate)
+    filePath = os.path.join(outputDir, currentTime + ".wav")
 
+    print(f"Recording complete. Saving to '{filePath}'...")
+    soundfile.write(filePath, recording, sampleRate)
     print("Audio saved successfully.")
 
-    return "recording/" + fileName
-    
+    return filePath
+
 
 def speechToText(
     audioFile: str,
     apiKey: str | None = None,
     modelID: str = "scribe_v2",
     languageCode: str = "eng",
+    deleteAfter: bool = True,
 ) -> str:
 
     """
@@ -57,13 +60,15 @@ def speechToText(
         Mandatory:
             - audioFile (str): Path to the audio file to be converted.
         Optional:
-            - apiKey (str): The API key for ElevenLabs. Default is "ELEVENLABS_API_KEY".
-            - modelID (str): The ID of the model to use for speech-to-text conversion. Default is "scribe_v2".
-            - languageCode (str): The language code for the audio file. Default is "eng".
+            - apiKey (str): The API key for ElevenLabs. Falls back to the ELEVENLABS_API_KEY environment variable.
+            - modelID (str): The ID of the model to use for speech-to-text conversion.
+            - languageCode (str): The language code for the audio file.
+            - deleteAfter (bool): Delete the audio file after a successful transcription.
         Default:
-            - apiKey: "ELEVENLABS_API_KEY"
+            - apiKey: ELEVENLABS_API_KEY from .env
             - modelID: "scribe_v2"
             - languageCode: "eng"
+            - deleteAfter: True
     """
 
     resolvedApiKey = apiKey or os.environ.get("ELEVENLABS_API_KEY")
@@ -85,33 +90,30 @@ def speechToText(
             diarize = True,
         )
 
-    os.remove(audioFile)
+    if deleteAfter:
+        os.remove(audioFile)
 
     return transcription.text
 
 def editTranscription(transcription: str) -> str:
 
     """
-    Give the user the option to edit the transcription. 
-    If the user chooses to edit, the transcription is copied to the clipboard for easy editing.
+    Give the user the option to edit the transcription.
+    If the user chooses to edit, the transcription is copied to the clipboard so it can be
+    pasted and edited at the prompt.
 
     Parameters:
         Mandatory:
             - transcription (str): The transcription text to be edited.
-        Optional:
-            - None
-        Default:
-            - None
     """
 
-
     print("Transcription:", transcription)
-    isEdit = input("Would you like to edit the transcription? (Yes / No)")
+    isEdit = input("Would you like to edit the transcription? (Yes / No) ")
 
-    if isEdit.lower() in ["yes", "y"]:
+    if isEdit.strip().lower() in ["yes", "y"]:
         pyperclip.copy(transcription)
-        newTranscription = input("The transcription has been copied to your clipboard, please enter the new transcription: ")
-        return newTranscription
+        newTranscription = input("The transcription has been copied to your clipboard. Paste it, edit it, then press Enter: ")
+        return newTranscription.strip() or transcription
     return transcription
 
 if __name__ == "__main__":
