@@ -1,7 +1,33 @@
+import os
+import sys
+
+
+def _enableWindowsANSI() -> None:
+    """Turn on ANSI escape code support in older Windows consoles (no effect elsewhere)."""
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+        mode = ctypes.c_uint32()
+        if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            kernel32.SetConsoleMode(handle, mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+    except Exception:
+        pass
+
+
+if os.name == "nt":
+    _enableWindowsANSI()
+
+
 class ChatColor:
 
     """
     A class that defines ANSI escape codes for various text colors and formatting in the terminal.
+
+    Use ChatColor.paint(text, *styles) to color text. Colors are skipped automatically when
+    output is not a terminal (e.g. redirected to a file or captured by tests) or when the
+    NO_COLOR environment variable is set.
     """
 
     # Dark colors
@@ -54,3 +80,21 @@ class ChatColor:
     BOLD = "\33[1m"
     UNDERLINE = "\33[4m"
     REVERSED = "\33[7m"
+
+    @staticmethod
+    def isEnabled() -> bool:
+        """Return True when colors should be printed."""
+        if os.environ.get("NO_COLOR"):
+            return False
+        isatty = getattr(sys.stdout, "isatty", None)
+        return bool(isatty and isatty())
+
+    @classmethod
+    def paint(cls, text: object, *styles: str) -> str:
+        """
+        Wrap text in the given styles and reset afterwards.
+        Example: ChatColor.paint("Done!", ChatColor.BOLD, ChatColor.GREEN)
+        """
+        if not styles or not cls.isEnabled():
+            return str(text)
+        return "".join(styles) + str(text) + cls.RESET

@@ -2,6 +2,11 @@ from urllib.parse import quote
 
 import requests
 
+try:
+    from .chatColor import ChatColor as C
+except ImportError:  # running this file directly as a script
+    from chatColor import ChatColor as C
+
 
 def getWordDefinition(
     requiredWord: str,
@@ -86,15 +91,16 @@ def formatWordDefinition(result: dict) -> str:
 
     word = result["word"]
     if not result["definitions"] and not result["translations"]:
-        return f'No definition found for "{word}".'
+        return C.paint(f'No definition found for "{word}".', C.ORANGE)
 
-    lines = [f'Definitions of "{word}":']
-    lines += [f"  - {eachDefinition}" for eachDefinition in result["definitions"]]
-    lines += ["", "Translation:"]
+    bullet = C.paint("  - ", C.DARK_GRAY)
+    lines = [C.paint("Definitions of ", C.BOLD) + C.paint(f'"{word}"', C.BOLD, C.VIOLET) + C.paint(":", C.BOLD)]
+    lines += [bullet + eachDefinition for eachDefinition in result["definitions"]]
+    lines += ["", C.paint("Translation:", C.BOLD)]
     if result["translations"]:
-        lines += [f"  - {eachTranslation}" for eachTranslation in result["translations"]]
+        lines += [bullet + C.paint(eachTranslation, C.GREEN) for eachTranslation in result["translations"]]
     else:
-        lines.append("  (none found)")
+        lines.append(C.paint("  (none found)", C.DARK_GRAY))
     return "\n".join(lines)
 
 

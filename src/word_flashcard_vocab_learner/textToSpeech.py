@@ -6,6 +6,11 @@ from elevenlabs.client import ElevenLabs
 from elevenlabs.play import play
 from dotenv import find_dotenv, load_dotenv
 
+try:
+    from .chatColor import ChatColor as C
+except ImportError:  # running this file directly as a script
+    from chatColor import ChatColor as C
+
 
 load_dotenv(find_dotenv(usecwd=True))
 
@@ -58,7 +63,7 @@ def textToSpeech(
 
     client = ElevenLabs(api_key=resolvedApiKey)
 
-    print(f"The audio of '{requiredText}' is generating...")
+    print(C.paint(f"The audio of '{requiredText}' is generating...", C.BLUE))
 
     audioStream = client.text_to_speech.convert(
         text = requiredText,
@@ -80,7 +85,7 @@ def textToSpeech(
         for chunk in audioStream:
             audioFile.write(chunk)
 
-    print(f"Audio saved successfully to {filePath}.")
+    print(C.paint(f"Audio saved successfully to {filePath}.", C.GREEN))
 
     if autoPlay:
         with open(filePath, "rb") as audioFile:

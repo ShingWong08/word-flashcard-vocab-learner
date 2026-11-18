@@ -7,6 +7,11 @@ from datetime import datetime
 from dotenv import find_dotenv, load_dotenv
 from elevenlabs.client import ElevenLabs
 
+try:
+    from .chatColor import ChatColor as C
+except ImportError:  # running this file directly as a script
+    from chatColor import ChatColor as C
+
 load_dotenv(find_dotenv(usecwd=True))
 
 
@@ -27,8 +32,9 @@ def getRecording(seconds: int, sampleRate: int = 16000, outputDir: str = "record
         str: Path of the saved WAV file.
     """
 
-    print(f"Please record your audio. This will record for {seconds} seconds.")
-    input("Press Enter to start recording...")
+    print(C.paint(f"Please record your audio. This will record for {seconds} seconds.", C.CYAN))
+    input(C.paint("Press Enter to start recording...", C.YELLOW))
+    print(C.paint("Recording...", C.BOLD, C.RED))
 
     recording = sounddevice.rec(
         int(seconds * sampleRate), samplerate=sampleRate, channels=1, blocking=True
@@ -39,9 +45,9 @@ def getRecording(seconds: int, sampleRate: int = 16000, outputDir: str = "record
     currentTime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     filePath = os.path.join(outputDir, currentTime + ".wav")
 
-    print(f"Recording complete. Saving to '{filePath}'...")
+    print(C.paint(f"Recording complete. Saving to '{filePath}'...", C.BLUE))
     soundfile.write(filePath, recording, sampleRate)
-    print("Audio saved successfully.")
+    print(C.paint("Audio saved successfully.", C.GREEN))
 
     return filePath
 
@@ -107,16 +113,16 @@ def editTranscription(transcription: str) -> str:
             - transcription (str): The transcription text to be edited.
     """
 
-    print("Transcription:", transcription)
-    isEdit = input("Would you like to edit the transcription? (Yes / No) ")
+    print(C.paint("Transcription:", C.BOLD), C.paint(transcription, C.VIOLET))
+    isEdit = input(C.paint("Would you like to edit the transcription? (Yes / No) ", C.YELLOW))
 
     if isEdit.strip().lower() in ["yes", "y"]:
         pyperclip.copy(transcription)
-        newTranscription = input("The transcription has been copied to your clipboard. Paste it, edit it, then press Enter: ")
+        newTranscription = input(C.paint("The transcription has been copied to your clipboard. Paste it, edit it, then press Enter: ", C.YELLOW))
         return newTranscription.strip() or transcription
     return transcription
 
 if __name__ == "__main__":
     result = speechToText(getRecording(seconds=5))
     editedResult = editTranscription(result)
-    print("Final Transcription:", editedResult)
+    print(C.paint("Final Transcription:", C.BOLD, C.GREEN), editedResult)
