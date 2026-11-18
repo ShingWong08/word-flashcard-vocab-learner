@@ -104,3 +104,8 @@ def isChinese(translation: dict) -> bool:
     name = language.get("name") or ""
 
     return code == "zh" or code.startswith("zh-") or "Chinese" in name
+
+
+if __name__ == "__main__":
+    print(getWordDefinition("example"))
+    print(formatWordDefinition(getWordDefinition("example")))

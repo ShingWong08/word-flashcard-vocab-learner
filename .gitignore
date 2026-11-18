@@ -1,13 +1,17 @@
+# Virtual environments
 env/
 venv/
-.env
 .venv/
-.pytest_cache/
-*.wav
-*.mp3
-*.egg-info/
+
+# Secrets
+.env
+
+# Python cache
+__pycache__/
+
+# Build output (flit build)
+dist/
+
+# Generated audio
 recording/
 audio_cache/
-dist/
-build/
-__pycache__/

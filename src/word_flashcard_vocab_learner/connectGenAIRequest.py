@@ -8,7 +8,7 @@ load_dotenv(find_dotenv(usecwd=True))
 def connectGenAIRequest(
     userMessage: str,
 
-    baseURL: str = "https://integrate.api.nvidia.com/v1",
+    baseURL: str = "https://integrate.api.nvidia.com/v1/chat/completions",
     apiKey: str | None = None,
     model: str = "deepseek-ai/deepseek-v4.1-flash",
     systemMessage: str = "You are an English vocabulary tutor. Return the word, definition, example sentence, and Chinese translation.",
