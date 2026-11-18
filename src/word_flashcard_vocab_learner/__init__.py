@@ -75,13 +75,13 @@ def showDefinitions(word: str) -> None:
         print(ChatColor.paint(f"Could not reach the dictionary: {error}", ChatColor.RED))
         return
 
-    print(result)
+    print(connectFreeDictionaryAPI.formatWordDefinition(result))
 
-    wordWasFound = len(result) != ""
+    wordWasFound = len(result["definitions"]) > 0
     speechIsSetUp = bool(os.environ.get("ELEVENLABS_API_KEY"))
 
     if wordWasFound and speechIsSetUp:
-        offerPronunciation(word)
+        offerPronunciation(result["word"])
 
 
 def offerPronunciation(word: str) -> None:
