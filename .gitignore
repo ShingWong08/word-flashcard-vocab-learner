@@ -4,9 +4,10 @@ __pycache__/
 *.wav
 *.mp3
 recording/
+.env
 dist/
 .venv/
 .pytest_cache/
 *.egg-info/
 build/
-audio/
+
