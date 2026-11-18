@@ -1,9 +1,10 @@
 import os
-import requests
 
+import requests
 from dotenv import find_dotenv, load_dotenv
 
 load_dotenv(find_dotenv(usecwd=True))
+
 
 def connectGenAIRequest(
     userMessage: str,
@@ -17,7 +18,6 @@ def connectGenAIRequest(
     maxTokens: int = 2000,
     reasoningEffort: str = "low",
     timeout: float = 60,
-
 ) -> str:
 
     """
@@ -34,8 +34,10 @@ def connectGenAIRequest(
             - timeout (float): Request timeout in seconds.
     """
 
-    resolvedApiKey = apiKey or os.environ.get("LLM_API_KEY")
-    if not resolvedApiKey:
+    if apiKey is None:
+        apiKey = os.environ.get("LLM_API_KEY")
+
+    if not apiKey:
         raise RuntimeError(
             "LLM_API_KEY is not configured. "
             "Set it in .env or pass apiKey explicitly."
@@ -43,15 +45,17 @@ def connectGenAIRequest(
 
     headers = {
         "Content-Type": "application/json",
-        "Authorization": "Bearer " + resolvedApiKey,
+        "Authorization": "Bearer " + apiKey,
     }
+
+    messages = [
+        {"role": "system", "content": systemMessage},
+        {"role": "user", "content": userMessage},
+    ]
 
     payload = {
         "model": model,
-        "messages": [
-            {"role": "system", "content": systemMessage},
-            {"role": "user", "content": userMessage},
-        ],
+        "messages": messages,
         "temperature": temperature,
         "top_p": top_P,
         "max_tokens": maxTokens,
@@ -64,4 +68,8 @@ def connectGenAIRequest(
     response.raise_for_status()
     data = response.json()
 
-    return data["choices"][0]["message"]["content"] or ""
+    content = data["choices"][0]["message"]["content"]
+    if content is None:
+        return ""
+
+    return content

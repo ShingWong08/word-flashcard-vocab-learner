@@ -6,7 +6,10 @@ from word_flashcard_vocab_learner import connectFreeDictionaryAPI as dictionary
 
 class FakeResponse:
     def __init__(self, data=None, status_code=200):
-        self._data = data or {}
+        if data is None:
+            data = {}
+
+        self._data = data
         self.status_code = status_code
 
     def json(self):
@@ -17,25 +20,17 @@ class FakeResponse:
             raise requests.HTTPError(f"HTTP {self.status_code}")
 
 
-def zh(word):
-    return {"language": {"code": "zh", "name": "Chinese"}, "word": word}
-
-
 SAMPLE = {
     "entries": [
         {
             "senses": [
                 {
                     "definition": "def 1",
-                    "translations": [
-                        {"language": {"code": "fr", "name": "French"}, "word": "exemple"},
-                        zh("例子"),
-                    ],
-                    "subsenses": [
-                        {"definition": "def 1a", "translations": [zh("範例"), zh("例子")]},
-                    ],
+                    "examples": ["ex 1 first", "ex 1 second", "ex 1 third"],
+                    "subsenses": [{"definition": "def 1a", "examples": ["ex 1a"]}],
                 },
-                {"definition": "def 2", "translations": [{"word": "no language"}]},
+                {"definition": "def 2"},
+                {"subsenses": []},
             ]
         }
     ]
@@ -55,31 +50,42 @@ def capturedURL(monkeypatch):
     return captured
 
 
-def test_collects_definitions_and_deduplicated_chinese_translations(capturedURL):
+def test_collects_definitions_and_matching_examples(capturedURL):
     result = dictionary.getWordDefinition("example")
 
     assert result == {
         "word": "example",
         "definitions": ["def 1", "def 1a", "def 2"],
-        "translations": ["例子", "範例"],
+        "examples": [["ex 1 first", "ex 1 second"], ["ex 1a"], []],
     }
     assert capturedURL["timeout"] == 15
+
+
+def test_respects_max_examples_per_definition(capturedURL):
+    result = dictionary.getWordDefinition("example", maxExamplesPerDefinition=3)
+    assert result["examples"][0] == ["ex 1 first", "ex 1 second", "ex 1 third"]
+
+
+def test_does_not_request_translations(capturedURL):
+    dictionary.getWordDefinition("example")
+    assert capturedURL["url"] == "https://freedictionaryapi.com/api/v1/entries/en/example"
 
 
 def test_respects_max_definitions(capturedURL):
     result = dictionary.getWordDefinition("example", maxDefinitions=1)
     assert result["definitions"] == ["def 1"]
+    assert result["examples"] == [["ex 1 first", "ex 1 second"]]
 
 
 def test_word_is_url_encoded(capturedURL):
     dictionary.getWordDefinition("  ice cream/x ")
-    assert "/en/ice%20cream%2Fx?" in capturedURL["url"]
+    assert capturedURL["url"].endswith("/en/ice%20cream%2Fx")
 
 
 def test_not_found_returns_empty_result(capturedURL):
     capturedURL["response"] = FakeResponse(status_code=404)
     result = dictionary.getWordDefinition("qwzx")
-    assert result == {"word": "qwzx", "definitions": [], "translations": []}
+    assert result == {"word": "qwzx", "definitions": [], "examples": []}
     assert dictionary.formatWordDefinition(result) == 'No definition found for "qwzx".'
 
 
@@ -94,25 +100,45 @@ def test_empty_word_raises():
         dictionary.getWordDefinition("   ")
 
 
-@pytest.mark.parametrize(
-    "translation, expected",
-    [
-        (zh("例子"), True),
-        ({"language": {"code": "zh-Hant", "name": None}}, True),
-        ({"language": {"code": "cmn", "name": "Mandarin Chinese"}}, True),
-        ({"language": {"code": "fr", "name": "French"}}, False),
-        ({"language": None}, False),
-        ({}, False),
-    ],
-)
-def test_isChinese(translation, expected):
-    assert dictionary.isChinese(translation) is expected
+def test_case_variants():
+    assert dictionary.caseVariants("jason") == ["jason", "Jason"]
+    assert dictionary.caseVariants("BOOK") == ["BOOK", "book", "Book"]
+    assert dictionary.caseVariants("cat") == ["cat", "Cat"]
 
 
-def test_format_word_definition():
-    text = dictionary.formatWordDefinition(
-        {"word": "cat", "definitions": ["a small animal"], "translations": []}
-    )
-    assert 'Definitions of "cat":' in text
-    assert "  - a small animal" in text
-    assert "(none found)" in text
+def test_falls_back_to_capitalized_spelling(monkeypatch):
+    requested = []
+
+    def fakeGet(url, timeout):
+        requested.append(url)
+        if url.endswith("/en/Jason"):
+            return FakeResponse({"entries": [{"senses": [{"definition": "A male given name."}]}]})
+        return FakeResponse({"word": "x", "entries": []})  # API answers 200 with no entries
+
+    monkeypatch.setattr(dictionary.requests, "get", fakeGet)
+    result = dictionary.getWordDefinition("jason")
+
+    assert result == {"word": "Jason", "definitions": ["A male given name."], "examples": [[]]}
+    assert [url.rsplit("/", 1)[1] for url in requested] == ["jason", "Jason"]
+
+
+def test_typed_spelling_wins_when_it_exists(capturedURL):
+    result = dictionary.getWordDefinition("Example")
+    assert result["word"] == "Example"
+    assert capturedURL["url"].endswith("/en/Example")
+
+
+def test_format_word_definition_with_examples():
+    text = dictionary.formatWordDefinition({
+        "word": "cat",
+        "definitions": ["a small animal", "a person"],
+        "examples": [["The cat sat on the mat.", "I have two cats."], []],
+    })
+
+    assert text == "\n".join([
+        'Definitions of "cat":',
+        "  - a small animal",
+        "    > The cat sat on the mat.",
+        "    > I have two cats.",
+        "  - a person",
+    ])

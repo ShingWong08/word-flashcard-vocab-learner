@@ -5,8 +5,8 @@ from openai import OpenAI
 
 load_dotenv(find_dotenv(usecwd=True))
 
-def connectGenAI(
 
+def connectGenAI(
     userMessage: str,
 
     baseURL: str = "https://integrate.api.nvidia.com/v1",
@@ -16,7 +16,6 @@ def connectGenAI(
     temperature: float = 1.0,
     top_P: float = 1.0,
     maxTokens: int = 2000,
-
 ) -> str:
 
     """
@@ -43,24 +42,32 @@ def connectGenAI(
             - maxTokens: 2000
     """
 
-    resolvedApiKey = apiKey or os.environ.get("LLM_API_KEY")
-    if not resolvedApiKey:
+    if apiKey is None:
+        apiKey = os.environ.get("LLM_API_KEY")
+
+    if not apiKey:
         raise RuntimeError(
             "LLM_API_KEY is not configured. "
             "Set it in .env or pass apiKey explicitly."
         )
 
-    client = OpenAI(base_url=baseURL, api_key=resolvedApiKey)
+    client = OpenAI(base_url=baseURL, api_key=apiKey)
+
+    messages = [
+        {"role": "system", "content": systemMessage},
+        {"role": "user", "content": userMessage},
+    ]
 
     response = client.chat.completions.create(
-        model = model,
-        messages = [
-            {"role": "system", "content": systemMessage},
-            {"role": "user", "content": userMessage},
-        ],
+        model=model,
+        messages=messages,
         temperature=temperature,
         top_p=top_P,
         max_tokens=maxTokens,
     )
 
-    return response.choices[0].message.content or ""
+    content = response.choices[0].message.content
+    if content is None:
+        return ""
+
+    return content

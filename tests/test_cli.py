@@ -15,13 +15,15 @@ def test_main_looks_up_word_then_quits(monkeypatch, capsys):
     monkeypatch.setattr(
         dictionary,
         "getWordDefinition",
-        lambda word: {"word": word, "definitions": ["a pet"], "translations": ["貓"]},
+        lambda word: {"word": word, "definitions": ["a pet"], "examples": [["My cat is asleep."]]},
     )
     run(monkeypatch, ["cat", "q"])
 
     out = capsys.readouterr().out
     assert 'Definitions of "cat":' in out
-    assert "貓" in out
+    assert "  - a pet" in out
+    assert "    > My cat is asleep." in out
+    assert "Translation" not in out
     assert "Goodbye!" in out
 
 

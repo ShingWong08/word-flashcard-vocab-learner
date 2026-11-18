@@ -2,16 +2,28 @@ import os
 import sys
 
 
+STANDARD_OUTPUT_HANDLE = -11
+ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+
+
 def _enableWindowsANSI() -> None:
-    """Turn on ANSI escape code support in older Windows consoles (no effect elsewhere)."""
+
+    """
+    Turn on ANSI escape code support in older Windows consoles.
+    Newer terminals (e.g. Windows Terminal) already support colors, so failures are ignored.
+    """
+
     try:
         import ctypes
 
         kernel32 = ctypes.windll.kernel32
-        handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
-        mode = ctypes.c_uint32()
-        if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
-            kernel32.SetConsoleMode(handle, mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+        consoleHandle = kernel32.GetStdHandle(STANDARD_OUTPUT_HANDLE)
+        currentMode = ctypes.c_uint32()
+
+        isConsole = kernel32.GetConsoleMode(consoleHandle, ctypes.byref(currentMode))
+        if isConsole:
+            newMode = currentMode.value | ENABLE_VIRTUAL_TERMINAL_PROCESSING
+            kernel32.SetConsoleMode(consoleHandle, newMode)
     except Exception:
         pass
 
@@ -83,18 +95,35 @@ class ChatColor:
 
     @staticmethod
     def isEnabled() -> bool:
-        """Return True when colors should be printed."""
+
+        """
+        Return True when colors should be printed.
+        Colors are turned off when NO_COLOR is set or when output is not a terminal.
+        """
+
         if os.environ.get("NO_COLOR"):
             return False
-        isatty = getattr(sys.stdout, "isatty", None)
-        return bool(isatty and isatty())
+
+        if not hasattr(sys.stdout, "isatty"):
+            return False
+
+        return sys.stdout.isatty()
 
     @classmethod
     def paint(cls, text: object, *styles: str) -> str:
+
         """
-        Wrap text in the given styles and reset afterwards.
+        Wrap text in the given styles and reset the style afterwards.
         Example: ChatColor.paint("Done!", ChatColor.BOLD, ChatColor.GREEN)
         """
-        if not styles or not cls.isEnabled():
-            return str(text)
-        return "".join(styles) + str(text) + cls.RESET
+
+        plainText = str(text)
+
+        if len(styles) == 0:
+            return plainText
+
+        if not cls.isEnabled():
+            return plainText
+
+        styleCodes = "".join(styles)
+        return styleCodes + plainText + cls.RESET

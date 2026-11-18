@@ -1,13 +1,12 @@
 import os
 import uuid
-
 from datetime import datetime
+
+from dotenv import find_dotenv, load_dotenv
 from elevenlabs.client import ElevenLabs
 from elevenlabs.play import play
-from dotenv import find_dotenv, load_dotenv
 
-from word_flashcard_vocab_learner.chatColor import ChatColor as C
-
+from word_flashcard_vocab_learner.chatColor import ChatColor
 
 load_dotenv(find_dotenv(usecwd=True))
 
@@ -48,28 +47,30 @@ def textToSpeech(
             - outputDir: "audio_cache"
     """
 
-    if not requiredText or not requiredText.strip():
+    if requiredText is None or requiredText.strip() == "":
         raise ValueError("Text cannot be empty or None.")
 
-    resolvedApiKey = apiKey or os.environ.get("ELEVENLABS_API_KEY")
-    if not resolvedApiKey:
+    if apiKey is None:
+        apiKey = os.environ.get("ELEVENLABS_API_KEY")
+
+    if not apiKey:
         raise RuntimeError(
             "ELEVENLABS_API_KEY is not configured. "
             "Set it in .env or pass apiKey explicitly."
         )
 
-    client = ElevenLabs(api_key=resolvedApiKey)
+    client = ElevenLabs(api_key=apiKey)
 
-    print(C.paint(f"The audio of '{requiredText}' is generating...", C.BLUE))
+    print(ChatColor.paint(f"The audio of '{requiredText}' is generating...", ChatColor.BLUE))
 
     audioStream = client.text_to_speech.convert(
-        text = requiredText,
-        voice_id = voiceID,
-        model_id = modelID,
-        output_format = outputFormat,
+        text=requiredText,
+        voice_id=voiceID,
+        model_id=modelID,
+        output_format=outputFormat,
     )
 
-    os.makedirs(outputDir, exist_ok = True)
+    os.makedirs(outputDir, exist_ok=True)
 
     if outputFileName is None:
         currentTime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -82,7 +83,7 @@ def textToSpeech(
         for chunk in audioStream:
             audioFile.write(chunk)
 
-    print(C.paint(f"Audio saved successfully to {filePath}.", C.GREEN))
+    print(ChatColor.paint(f"Audio saved successfully to {filePath}.", ChatColor.GREEN))
 
     if autoPlay:
         with open(filePath, "rb") as audioFile:

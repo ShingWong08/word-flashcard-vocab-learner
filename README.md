@@ -1,7 +1,7 @@
 # Word flashcard vocabulary learner
 
 A lightweight command-line tool that helps students learn English vocabulary.
-Look up a word to see its definitions and Chinese translation, and optionally hear its pronunciation.
+Look up a word to see its English definitions, and optionally hear its pronunciation.
 
 ## Requirements
 

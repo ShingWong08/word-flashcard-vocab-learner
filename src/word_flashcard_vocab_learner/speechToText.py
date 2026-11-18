@@ -1,15 +1,18 @@
 import os
+from datetime import datetime
+
+import pyperclip
 import sounddevice
 import soundfile
-import pyperclip
-
-from datetime import datetime
 from dotenv import find_dotenv, load_dotenv
 from elevenlabs.client import ElevenLabs
 
-from word_flashcard_vocab_learner.chatColor import ChatColor as C
+from word_flashcard_vocab_learner.chatColor import ChatColor
 
 load_dotenv(find_dotenv(usecwd=True))
+
+
+YES_ANSWERS = ["yes", "y"]
 
 
 def getRecording(seconds: int, sampleRate: int = 16000, outputDir: str = "recording") -> str:
@@ -29,22 +32,21 @@ def getRecording(seconds: int, sampleRate: int = 16000, outputDir: str = "record
         str: Path of the saved WAV file.
     """
 
-    print(C.paint(f"Please record your audio. This will record for {seconds} seconds.", C.CYAN))
-    input(C.paint("Press Enter to start recording...", C.YELLOW))
-    print(C.paint("Recording...", C.BOLD, C.RED))
+    print(ChatColor.paint(f"Please record your audio. This will record for {seconds} seconds.", ChatColor.CYAN))
+    input(ChatColor.paint("Press Enter to start recording...", ChatColor.YELLOW))
+    print(ChatColor.paint("Recording...", ChatColor.BOLD, ChatColor.RED))
 
-    recording = sounddevice.rec(
-        int(seconds * sampleRate), samplerate=sampleRate, channels=1, blocking=True
-    )
+    numberOfSamples = int(seconds * sampleRate)
+    recording = sounddevice.rec(numberOfSamples, samplerate=sampleRate, channels=1, blocking=True)
 
     os.makedirs(outputDir, exist_ok=True)
 
     currentTime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     filePath = os.path.join(outputDir, currentTime + ".wav")
 
-    print(C.paint(f"Recording complete. Saving to '{filePath}'...", C.BLUE))
+    print(ChatColor.paint(f"Recording complete. Saving to '{filePath}'...", ChatColor.BLUE))
     soundfile.write(filePath, recording, sampleRate)
-    print(C.paint("Audio saved successfully.", C.GREEN))
+    print(ChatColor.paint("Audio saved successfully.", ChatColor.GREEN))
 
     return filePath
 
@@ -74,23 +76,24 @@ def speechToText(
             - deleteAfter: True
     """
 
-    resolvedApiKey = apiKey or os.environ.get("ELEVENLABS_API_KEY")
-    if not resolvedApiKey:
+    if apiKey is None:
+        apiKey = os.environ.get("ELEVENLABS_API_KEY")
+
+    if not apiKey:
         raise RuntimeError(
             "ELEVENLABS_API_KEY is not configured. "
             "Set it in .env or pass apiKey explicitly."
         )
 
-    client = ElevenLabs(api_key=resolvedApiKey)
+    client = ElevenLabs(api_key=apiKey)
 
     with open(audioFile, "rb") as audio:
-
         transcription = client.speech_to_text.convert(
-            file = audio,
-            model_id = modelID,
-            tag_audio_events = True,
-            language_code = languageCode,
-            diarize = True,
+            file=audio,
+            model_id=modelID,
+            tag_audio_events=True,
+            language_code=languageCode,
+            diarize=True,
         )
 
     if deleteAfter:
@@ -98,28 +101,39 @@ def speechToText(
 
     return transcription.text
 
+
 def editTranscription(transcription: str) -> str:
 
     """
     Give the user the option to edit the transcription.
     If the user chooses to edit, the transcription is copied to the clipboard so it can be
-    pasted and edited at the prompt.
+    pasted and edited at the prompt. An empty answer keeps the original transcription.
 
     Parameters:
         Mandatory:
             - transcription (str): The transcription text to be edited.
     """
 
-    print(C.paint("Transcription:", C.BOLD), C.paint(transcription, C.VIOLET))
-    isEdit = input(C.paint("Would you like to edit the transcription? (Yes / No) ", C.YELLOW))
+    print(ChatColor.paint("Transcription:", ChatColor.BOLD), ChatColor.paint(transcription, ChatColor.VIOLET))
 
-    if isEdit.strip().lower() in ["yes", "y"]:
-        pyperclip.copy(transcription)
-        newTranscription = input(C.paint("The transcription has been copied to your clipboard. Paste it, edit it, then press Enter: ", C.YELLOW))
-        return newTranscription.strip() or transcription
-    return transcription
+    answer = input(ChatColor.paint("Would you like to edit the transcription? (Yes / No) ", ChatColor.YELLOW))
+    wantsToEdit = answer.strip().lower() in YES_ANSWERS
+
+    if not wantsToEdit:
+        return transcription
+
+    pyperclip.copy(transcription)
+
+    editPrompt = "The transcription has been copied to your clipboard. Paste it, edit it, then press Enter: "
+    newTranscription = input(ChatColor.paint(editPrompt, ChatColor.YELLOW)).strip()
+
+    if newTranscription == "":
+        return transcription
+
+    return newTranscription
+
 
 if __name__ == "__main__":
     result = speechToText(getRecording(seconds=5))
     editedResult = editTranscription(result)
-    print(C.paint("Final Transcription:", C.BOLD, C.GREEN), editedResult)
+    print(ChatColor.paint("Final Transcription:", ChatColor.BOLD, ChatColor.GREEN), editedResult)
