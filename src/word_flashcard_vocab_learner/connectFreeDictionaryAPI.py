@@ -14,6 +14,7 @@ def getWordDefinition(
     otherArguments: str = "?translations=true",
     maxDefinitions: int = 3,
     maxTranslations: int = 3,
+    maxExamplesPerDef: int = 3,
     timeout: float = 15,
 ) -> dict:
 
@@ -40,6 +41,7 @@ def getWordDefinition(
     """
 
     word = requiredWord.strip()
+    
     if not word:
         raise ValueError("Word cannot be empty.")
 
@@ -52,6 +54,7 @@ def getWordDefinition(
     data = response.json()
 
     definitions = []
+    examples = []
     translations = []
 
     def collectTranslations(sense: dict) -> None:
@@ -69,7 +72,11 @@ def getWordDefinition(
 
             if "definition" in eachSense:
                 definitions.append(eachSense["definition"])
+                if "examples" in eachSense:
+                    examples.append(eachSense["examples"])
+
             collectTranslations(eachSense)
+            
 
             for eachSubSense in eachSense.get("subsenses", []):
                 if "definition" in eachSubSense:
@@ -79,6 +86,7 @@ def getWordDefinition(
     return {
         "word": word,
         "definitions": definitions[:maxDefinitions],
+        "examples": [eachExample[:maxExamplesPerDef] for eachExample in examples],
         "translations": translations[:maxTranslations],
     }
 
@@ -95,8 +103,14 @@ def formatWordDefinition(result: dict) -> str:
 
     bullet = C.paint("  - ", C.DARK_GRAY)
     lines = [C.paint("Definitions of ", C.BOLD) + C.paint(f'"{word}"', C.BOLD, C.VIOLET) + C.paint(":", C.BOLD)]
-    lines += [bullet + eachDefinition for eachDefinition in result["definitions"]]
+
+    for i, definition in enumerate(result["definitions"]):
+        lines += [bullet + definition]
+        respectiveExample = result["examples"][i] if len(result["examples"][i]) > 0 else ""
+        lines += [f"    > {eachExample}" for eachExample in respectiveExample]
+
     lines += ["", C.paint("Translation:", C.BOLD)]
+
     if result["translations"]:
         lines += [bullet + C.paint(eachTranslation, C.GREEN) for eachTranslation in result["translations"]]
     else:
@@ -110,8 +124,3 @@ def isChinese(translation: dict) -> bool:
     name = language.get("name") or ""
 
     return code == "zh" or code.startswith("zh-") or "Chinese" in name
-
-
-if __name__ == "__main__":
-    print(getWordDefinition("example"))
-    print(formatWordDefinition(getWordDefinition("example")))

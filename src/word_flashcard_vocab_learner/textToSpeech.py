@@ -92,3 +92,5 @@ def textToSpeech(
             play(audioFile.read())
 
     return filePath
+
+textToSpeech("Lorem", autoPlay=False)
