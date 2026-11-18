@@ -71,3 +71,9 @@ def connectGenAI(
     content = response.choices[0].message.content
 
     return content
+
+# print(
+#     connectGenAI(
+#         "Please provide a list of 10 English vocabulary words with their definitions, example sentences, and Chinese translations."
+#     )
+# )

@@ -69,3 +69,4 @@ def isChinese(translation: dict) -> bool:
 
     return False
 
+# print(getWordDefinition("example"))

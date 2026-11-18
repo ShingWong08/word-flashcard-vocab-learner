@@ -5,7 +5,7 @@ from dotenv import find_dotenv, load_dotenv
 
 load_dotenv(find_dotenv())
 
-def connectGenAI(
+def connectGenAIRequest(
     userMessaage: str,
 
     baseURL: str = "https://api.deepseek.com/chat/completions",
@@ -59,3 +59,9 @@ def connectGenAI(
     print(content)
 
     return content
+
+# print(
+#     connectGenAIRequest(
+#         "Please provide a list of 10 English vocabulary words with their definitions, example sentences, and Chinese translations."
+#     )
+# )

@@ -57,7 +57,7 @@ def textToSpeech(
     print(f"The audio of '{requiredText}' is generating...")
 
     audioStream = client.text_to_speech.convert(
-        requiredText = requiredText,
+        text = requiredText,
         voice_id = voiceID,
         model_id = modelID,
         output_format = outputFormat,
