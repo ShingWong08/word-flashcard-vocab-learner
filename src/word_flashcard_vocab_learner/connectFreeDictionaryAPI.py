@@ -2,10 +2,7 @@ from urllib.parse import quote
 
 import requests
 
-try:
-    from .chatColor import ChatColor as C
-except ImportError:  # running this file directly as a script
-    from chatColor import ChatColor as C
+from word_flashcard_vocab_learner.chatColor import ChatColor as C
 
 
 def getWordDefinition(

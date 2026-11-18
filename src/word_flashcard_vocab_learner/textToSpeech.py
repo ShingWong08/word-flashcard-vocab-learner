@@ -6,10 +6,7 @@ from elevenlabs.client import ElevenLabs
 from elevenlabs.play import play
 from dotenv import find_dotenv, load_dotenv
 
-try:
-    from .chatColor import ChatColor as C
-except ImportError:  # running this file directly as a script
-    from chatColor import ChatColor as C
+from word_flashcard_vocab_learner.chatColor import ChatColor as C
 
 
 load_dotenv(find_dotenv(usecwd=True))

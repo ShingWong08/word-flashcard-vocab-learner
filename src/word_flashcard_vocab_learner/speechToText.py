@@ -7,10 +7,7 @@ from datetime import datetime
 from dotenv import find_dotenv, load_dotenv
 from elevenlabs.client import ElevenLabs
 
-try:
-    from .chatColor import ChatColor as C
-except ImportError:  # running this file directly as a script
-    from chatColor import ChatColor as C
+from word_flashcard_vocab_learner.chatColor import ChatColor as C
 
 load_dotenv(find_dotenv(usecwd=True))
 
