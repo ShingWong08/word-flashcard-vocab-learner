@@ -22,6 +22,10 @@ def clampBox(box: int) -> int:
     """
     Keep a box number between MIN_BOX and MAX_BOX (in case the deck file was edited by hand).
     """
+    try:
+        box = int(box)
+    except (TypeError, ValueError):
+        box = MIN_BOX
 
     return max(MIN_BOX, min(box, MAX_BOX))
 
