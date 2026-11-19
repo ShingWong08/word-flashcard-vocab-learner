@@ -55,8 +55,12 @@ def askYesNo(promptText: str, default: bool | None = None) -> bool | None:
     while True:
         answer = ask(promptText, ChatColor.YELLOW)
 
-        if isQuit(answer):
+        while True:
+            answer = ask(promptText, ChatColor.YELLOW)
+        if answer is None or isQuit(answer):
             return None
+
+    lowered = answer.lower()
 
         lowered = answer.lower()
 
