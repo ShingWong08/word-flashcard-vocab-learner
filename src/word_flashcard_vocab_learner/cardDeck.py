@@ -47,7 +47,7 @@ def loadDeck(path: str) -> list[Card]:
         for eachCardData in data:
             cards.append(Card.fromDict(eachCardData))
 
-    except (json.JSONDecodeError, TypeError, AttributeError, ValueError) as error:
+    except (json.JSONDecodeError, TypeError, AttributeError, KeyError, ValueError) as error:
         raise ValueError(f"The deck file '{path}' is damaged: {error}") from error
 
     return cards
@@ -62,7 +62,7 @@ def saveDeck(cards: list[Card], path: str) -> None:
     """
 
     folder = os.path.dirname(path)
-    if folder != "":
+    if folder:
         os.makedirs(folder, exist_ok=True)
 
     data = []
@@ -74,7 +74,7 @@ def saveDeck(cards: list[Card], path: str) -> None:
     with open(temporaryPath, "w", encoding="utf-8") as deckFile:
         json.dump(data, deckFile, ensure_ascii=False, indent=2)
 
-    os.replace(temporaryPath, path)
+    .replace(temporaryPath, path)
 
 
 def backupPath(path: str) -> str:
@@ -84,7 +84,7 @@ def backupPath(path: str) -> str:
     """
 
     root, extension = os.path.splitext(path)
-    if extension == "":
+    if not extension:
         extension = ".json"
 
     return root + ".backup" + extension
@@ -173,13 +173,13 @@ def getDueCards(cards: list[Card], today: date) -> list[Card]:
     return dueCards
 
 
-def nextDueDate(cards: list[Card]) -> str | None:
+def nextDueDate(cards: list[Card]) -> date | None:
 
     """
     Return the earliest review date in the deck, or None if the deck is empty.
     """
 
-    if len(cards) == 0:
+    if not cards:
         return None
 
     earliest = cards[0].nextReview
