@@ -71,11 +71,17 @@ def saveDeck(cards: list[Card], path: str) -> None:
 
     temporaryPath = path + ".tmp"
 
-    with open(temporaryPath, "w", encoding="utf-8") as deckFile:
-        json.dump(data, deckFile, ensure_ascii=False, indent=2)
+    try:
+         with open(temporaryPath, "w", encoding="utf-8") as deckFile:
+             json.dump(data, deckFile, ensure_ascii=False, indent=2)
+ 
+         os.replace(temporaryPath, path)
+ 
+    except Exception:
+         if os.path.exists(temporaryPath):
+             os.remove(temporaryPath)
 
-    .replace(temporaryPath, path)
-
+         raise
 
 def backupPath(path: str) -> str:
 
