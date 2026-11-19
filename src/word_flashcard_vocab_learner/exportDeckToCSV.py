@@ -31,7 +31,7 @@ def cardToRow(card: Card) -> list:
 
     firstExample = ""
     for eachExampleList in card.examples:
-        if len(eachExampleList) > 0:
+        if eachExampleList and len(eachExampleList) > 0:
             firstExample = eachExampleList[0]
             break
 
