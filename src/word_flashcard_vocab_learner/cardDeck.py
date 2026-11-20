@@ -29,7 +29,7 @@ def loadDeck(path: str) -> list[Card]:
 
     """
     Load all cards from a JSON deck file.
-    Returns an empty list if the file does not exist yet.
+    Returns an empty list if the file does not exist/ file is completely empty.
     Raises ValueError if the file exists but cannot be read as a deck.
     """
 
@@ -38,7 +38,12 @@ def loadDeck(path: str) -> list[Card]:
 
     try:
         with open(path, encoding="utf-8") as deckFile:
-            data = json.load(deckFile)
+            content = deckFile.read().strip()
+
+        if not content:
+            return []
+
+        data = json.loads(content)
 
         if not isinstance(data, list):
             raise ValueError("the file does not contain a list of cards")
