@@ -9,6 +9,13 @@ from word_flashcard_vocab_learner.flashCard import Card
 
 DECK_PATH_ENV = "WORD_FLASHCARD_DECK"
 
+# Card data last read from or written to each deck file, keyed by _deckKey(path).
+# saveDeck uses it to see what changed here and what changed in another window.
+_knownDecks: dict[str, list[dict]] = {}
+
+# Note for the user, set by saveDeck when it had to merge in changes made elsewhere.
+_mergeNotes: dict[str, str] = {}
+
 
 def defaultDeckPath() -> str:
 
@@ -33,27 +40,17 @@ def loadDeck(path: str) -> list[Card]:
     Raises ValueError if the file exists but cannot be read as a deck.
     """
 
-    if not os.path.exists(path):
-        return []
+    data = _readDeckData(path)
 
     try:
-        with open(path, encoding="utf-8") as deckFile:
-            content = deckFile.read().strip()
-
-        if not content:
-            return []
-
-        data = json.loads(content)
-
-        if not isinstance(data, list):
-            raise ValueError("the file does not contain a list of cards")
-
         cards = []
         for eachCardData in data:
             cards.append(Card.fromDict(eachCardData))
 
-    except (json.JSONDecodeError, TypeError, AttributeError, KeyError, ValueError) as error:
+    except (TypeError, AttributeError, KeyError, ValueError) as error:
         raise ValueError(f"The deck file '{path}' is damaged: {error}") from error
+
+    _knownDecks[_deckKey(path)] = data
 
     return cards
 
@@ -64,29 +61,226 @@ def saveDeck(cards: list[Card], path: str) -> None:
     Save all cards to a JSON deck file.
     The file is written to a temporary file first and then moved into place,
     so the deck is not lost if the program stops halfway through saving.
+
+    If another window changed the deck file since this one read it, both sets of
+    changes are kept (see mergeDecks), so one window never silently overwrites
+    the words added in the other.
+    """
+
+    data = []
+    for eachCard in cards:
+        data.append(eachCard.toDict())
+
+    key = _deckKey(path)
+    knownData = _knownDecks.get(key)
+    mergedElsewhere = False
+
+    if knownData is not None and os.path.exists(path):
+        try:
+            fileData = _readDeckData(path)
+        except ValueError:
+            # The file was replaced by something this program cannot read.
+            # Keep a copy of it before it gets overwritten.
+            try:
+                shutil.copyfile(path, path + ".damaged")
+            except OSError:
+                pass
+        else:
+            if fileData != knownData:
+                data = mergeDecks(knownData, data, fileData)
+                _mergeNotes[key] = "Another window changed the deck, so both changes were kept."
+                mergedElsewhere = True
+
+    _writeDeckData(data, path)
+
+    if mergedElsewhere:
+        _applyMergedData(cards, data)
+
+    _knownDecks[key] = data
+
+
+def takeMergeNote(path: str) -> str | None:
+
+    """
+    Return (and clear) the note left by the last save if it had to merge in
+    changes made by another window, or None when no merge happened.
+    """
+
+    return _mergeNotes.pop(_deckKey(path), None)
+
+
+def mergeDecks(knownData: list[dict], newData: list[dict], fileData: list[dict]) -> list[dict]:
+
+    """
+    Combine the deck this window has (newData) with the deck another window saved
+    meanwhile (fileData), using what this window last read (knownData) to see what changed.
+    Returns the merged list of card dicts.
+
+    Rules:
+        - a card changed here wins over the older copy in the file;
+        - a card this window did not change keeps the newer copy from the file;
+        - a word added in either window is kept;
+        - a word removed here stays removed.
+    """
+
+    knownByWord = {}
+    for eachCardData in knownData:
+        knownByWord[_cardKey(eachCardData)] = eachCardData
+
+    newByWord = {}
+    for eachCardData in newData:
+        newByWord[_cardKey(eachCardData)] = eachCardData
+
+    fileByWord = {}
+    for eachCardData in fileData:
+        fileByWord[_cardKey(eachCardData)] = eachCardData
+
+    merged = []
+
+    for word, newCard in newByWord.items():
+        fileCard = fileByWord.get(word)
+        knownCard = knownByWord.get(word)
+
+        if fileCard is None:
+            # Not in the file: either added here, or another window deleted it.
+            if knownCard is None or newCard != knownCard:
+                merged.append(newCard)
+            continue
+
+        if knownCard is None or newCard != knownCard:
+            merged.append(newCard)
+        else:
+            merged.append(fileCard)
+
+    for word, fileCard in fileByWord.items():
+        if word in newByWord:
+            continue
+        if word in knownByWord:
+            # Removed in this window: keep it removed.
+            continue
+        merged.append(fileCard)
+
+    return merged
+
+
+def _applyMergedData(cards: list[Card], mergedData: list[dict]) -> None:
+
+    """
+    Bring the caller's card list up to date with the merged deck, so the next save
+    does not put the old values back. Cards already in the list are updated in place
+    (a review session may still hold those objects), cards added by another window
+    are appended, and cards another window deleted are dropped.
+    """
+
+    mergedKeys = []
+    for eachCardData in mergedData:
+        mergedKeys.append(_cardKey(eachCardData))
+
+    for eachCardData in mergedData:
+        newCard = Card.fromDict(eachCardData)
+        existingCard = findCard(cards, newCard.word)
+
+        if existingCard is None:
+            cards.append(newCard)
+        else:
+            existingCard.__dict__.update(newCard.__dict__)
+
+    for index in range(len(cards) - 1, -1, -1):
+        if _cardKey(cards[index].toDict()) not in mergedKeys:
+            del cards[index]
+
+
+def _readDeckData(path: str) -> list[dict]:
+
+    """
+    Read the list of card dicts from a deck file, without building Card objects.
+    Returns an empty list if the file does not exist or is empty.
+    Raises ValueError with a message the user can act on if the path cannot be used as a deck.
+    """
+
+    if not os.path.exists(path):
+        return []
+
+    try:
+        with open(path, encoding="utf-8") as deckFile:
+            content = deckFile.read().strip()
+
+    except IsADirectoryError:
+        raise ValueError(
+            f"'{path}' is a folder, not a deck file. "
+            "Point WORD_FLASHCARD_DECK at a .json file, for example ~/.word_flashcard/deck.json."
+        ) from None
+
+    except PermissionError:
+        raise ValueError(f"The deck file '{path}' cannot be read: permission denied.") from None
+
+    except UnicodeDecodeError:
+        raise ValueError(f"The deck file '{path}' is damaged: it is not UTF-8 text.") from None
+
+    except OSError as error:
+        raise ValueError(f"The deck file '{path}' cannot be read: {error}") from error
+
+    if not content:
+        return []
+
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"The deck file '{path}' is damaged: {error}") from error
+
+    if not isinstance(data, list):
+        raise ValueError(f"The deck file '{path}' is damaged: the file does not contain a list of cards")
+
+    return data
+
+
+def _writeDeckData(data: list[dict], path: str) -> None:
+
+    """
+    Write the card dicts to the deck file: temporary file first, then move it into place.
     """
 
     folder = os.path.dirname(path)
     if folder:
         os.makedirs(folder, exist_ok=True)
 
-    data = []
-    for eachCard in cards:
-        data.append(eachCard.toDict())
-
     temporaryPath = path + ".tmp"
 
     try:
-         with open(temporaryPath, "w", encoding="utf-8") as deckFile:
-             json.dump(data, deckFile, ensure_ascii=False, indent=2)
- 
-         os.replace(temporaryPath, path)
- 
-    except Exception:
-         if os.path.exists(temporaryPath):
-             os.remove(temporaryPath)
+        with open(temporaryPath, "w", encoding="utf-8") as deckFile:
+            json.dump(data, deckFile, ensure_ascii=False, indent=2)
 
-         raise
+        os.replace(temporaryPath, path)
+
+    except Exception:
+        if os.path.exists(temporaryPath):
+            os.remove(temporaryPath)
+
+        raise
+
+
+def _deckKey(path: str) -> str:
+
+    """
+    The key used to remember a deck file: the same file always gets the same key.
+    """
+
+    return os.path.abspath(os.path.expanduser(path))
+
+
+def _cardKey(cardData: dict) -> str:
+
+    """
+    The word a card is filed under, matching how findCard compares words.
+    """
+
+    word = cardData.get("word")
+
+    if not isinstance(word, str):
+        return ""
+
+    return word.strip().casefold()
+
 
 def backupPath(path: str) -> str:
 

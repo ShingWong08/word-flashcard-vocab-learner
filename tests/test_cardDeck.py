@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import date
 
@@ -100,3 +101,102 @@ def test_default_deck_path_is_in_home_folder(monkeypatch):
     monkeypatch.delenv("WORD_FLASHCARD_DECK")
     expected = os.path.join(os.path.expanduser("~"), ".word_flashcard", "deck.json")
     assert cardDeck.defaultDeckPath() == expected
+
+
+def anotherWindowSaves(path, cards):
+    # Write the deck the way a second running copy of the program would.
+    data = [eachCard.toDict() for eachCard in cards]
+    with open(path, "w", encoding="utf-8") as deckFile:
+        json.dump(data, deckFile, ensure_ascii=False)
+
+
+def test_load_deck_that_is_a_folder_gives_a_friendly_error(tmp_path):
+    folder = tmp_path / "deck"
+    folder.mkdir()
+
+    with pytest.raises(ValueError, match="is a folder, not a deck file"):
+        cardDeck.loadDeck(str(folder))
+
+
+def test_word_added_in_another_window_is_kept(tmp_path):
+    path = str(tmp_path / "deck.json")
+    cardDeck.saveDeck([makeCard("cat")], path)
+
+    cards = cardDeck.loadDeck(path)
+    anotherWindowSaves(path, [makeCard("cat"), makeCard("dog")])
+
+    cards.append(makeCard("bird"))
+    cardDeck.saveDeck(cards, path)
+
+    assert sorted(eachCard.word for eachCard in cardDeck.loadDeck(path)) == ["bird", "cat", "dog"]
+
+
+def test_word_removed_here_stays_removed(tmp_path):
+    path = str(tmp_path / "deck.json")
+    cardDeck.saveDeck([makeCard("cat"), makeCard("dog")], path)
+
+    cards = cardDeck.loadDeck(path)
+    anotherWindowSaves(path, [makeCard("cat"), makeCard("dog"), makeCard("bird")])
+
+    cards.remove(cardDeck.findCard(cards, "cat"))
+    cardDeck.saveDeck(cards, path)
+
+    words = [eachCard.word for eachCard in cardDeck.loadDeck(path)]
+    assert "cat" not in words
+    assert "bird" in words
+    assert "dog" in words
+
+
+def test_card_changed_here_wins_over_the_file_copy(tmp_path):
+    path = str(tmp_path / "deck.json")
+    cardDeck.saveDeck([makeCard("cat", nextReview="2026-11-18")], path)
+
+    cards = cardDeck.loadDeck(path)
+    anotherWindowSaves(path, [makeCard("cat", nextReview="2026-11-18"), makeCard("dog")])
+
+    cardDeck.findCard(cards, "cat").box = 3
+    cardDeck.saveDeck(cards, path)
+
+    savedCat = cardDeck.findCard(cardDeck.loadDeck(path), "cat")
+    assert savedCat.box == 3
+
+
+def test_unchanged_card_keeps_the_newer_copy_from_the_file(tmp_path):
+    path = str(tmp_path / "deck.json")
+    cardDeck.saveDeck([makeCard("cat", nextReview="2026-11-18")], path)
+
+    cards = cardDeck.loadDeck(path)
+    anotherWindowSaves(path, [makeCard("cat", nextReview="2026-12-01")])
+
+    cardDeck.saveDeck(cards, path)
+
+    assert cardDeck.findCard(cardDeck.loadDeck(path), "cat").nextReview == "2026-12-01"
+    # The open window shows the newer copy too.
+    assert cardDeck.findCard(cards, "cat").nextReview == "2026-12-01"
+
+
+def test_saving_after_a_merge_leaves_a_note_for_the_user(tmp_path):
+    path = str(tmp_path / "deck.json")
+    cardDeck.saveDeck([makeCard("cat")], path)
+
+    cards = cardDeck.loadDeck(path)
+    anotherWindowSaves(path, [makeCard("cat"), makeCard("dog")])
+    cardDeck.saveDeck(cards, path)
+
+    assert cardDeck.takeMergeNote(path) is not None
+    assert cardDeck.takeMergeNote(path) is None
+
+
+def test_unreadable_file_is_copied_before_being_replaced(tmp_path):
+    path = str(tmp_path / "deck.json")
+    cardDeck.saveDeck([makeCard("cat")], path)
+
+    cards = cardDeck.loadDeck(path)
+    with open(path, "w", encoding="utf-8") as deckFile:
+        deckFile.write("{not json")
+
+    cards.append(makeCard("dog"))
+    cardDeck.saveDeck(cards, path)
+
+    assert os.path.exists(path + ".damaged")
+    assert [eachCard.word for eachCard in cardDeck.loadDeck(path)] == ["cat", "dog"]
