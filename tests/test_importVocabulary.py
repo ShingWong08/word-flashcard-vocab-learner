@@ -221,6 +221,60 @@ def test_word_list_is_detected():
     assert importVocabulary.looksLikeWordList("This is a long sentence about many things.\nAnd another long one here.") is False
 
 
+def test_markdown_front_matter_and_links_do_not_hide_the_words():
+    text = (
+        "---\n"
+        "title: test\n"
+        "---\n"
+        "\n"
+        "Visit https://example.com or www.test.org for more.\n"
+        "The seminar discussed sustainability.\n"
+    )
+
+    assert importVocabulary.looksLikeWordList(text) is False
+    assert importVocabulary.extractWords(text) == ["visit", "seminar", "discussed", "sustainability"]
+
+
+def test_note_lines_are_prose_not_a_word_list():
+    text = (
+        "Note: the seminar discussed sustainability.\n"
+        "Example: biodiversity matters.\n"
+        "Deforestation is a problem.\n"
+    )
+
+    assert importVocabulary.looksLikeWordList(text) is False
+    assert importVocabulary.extractWords(text) == ["seminar", "discussed", "sustainability", "biodiversity", "matters", "deforestation"]
+
+
+def test_links_and_emails_leave_no_word_fragments():
+    text = "Visit https://example.com today.\nRead www.test.org daily.\nEmail me at a@b.com please.\n"
+
+    assert importVocabulary.extractWords(text) == ["visit", "daily", "email"]
+
+
+def test_short_words_come_from_a_passage():
+    assert importVocabulary.extractWords("The cat sat on the mat with a dog.") == ["cat", "sat", "mat", "dog"]
+
+
+def test_contractions_do_not_leave_word_stems():
+    assert importVocabulary.extractWords("I couldn't visit the museum; she isn't well.") == ["visit", "museum"]
+
+
+def test_word_list_with_meanings_is_still_a_list():
+    assert importVocabulary.extractWords("cat - 狗\nmat - 垫子\n3. dog\n") == ["cat", "mat", "dog"]
+
+
+def test_clean_text_removes_front_matter_links_and_emails():
+    text = "\ufeff---\ntitle: test\n---\n\nSee https://example.com or mail me at a@b.com\n"
+
+    cleaned = importVocabulary.cleanText(text)
+
+    assert "title" not in cleaned
+    assert "https" not in cleaned
+    assert "@" not in cleaned
+    assert "See" in cleaned
+
+
 def test_words_from_passage_skips_common_words_and_names():
     text = (
         "Scientists were reluctant to accept the hypothesis.\n"

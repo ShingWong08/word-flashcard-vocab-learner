@@ -21,7 +21,7 @@ WORD_EXTENSIONS = [".docx"]
 IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff", ".webp"]
 
 MAX_IMPORT_WORDS = 100
-MIN_PASSAGE_WORD_LENGTH = 4
+MIN_PASSAGE_WORD_LENGTH = 3    # "cat" and "dog" are vocabulary too; very common words are filtered by COMMON_WORDS
 MIN_PAGE_TEXT_LENGTH = 3       # a page with less text than this is treated as a scanned page
 WORD_LIST_SHARE = 0.7
 OCR_DPI = 300
@@ -33,8 +33,18 @@ OCR_EXTRA_HINT = 'pip install ".[ocr]" and install Tesseract OCR (https://github
 
 ENGLISH_WORD = r"[A-Za-z]+(?:['’-][A-Za-z]+)*"
 
+# A markdown/TOML front matter block at the start of a file: the "--- … ---" or "+++ … +++" header.
+FRONT_MATTER = re.compile(r"\A\s*(?:-{3}|\+{3})[ \t]*\n.*?\n(?:-{3}|\+{3})[ \t]*\n", re.DOTALL)
+# A link or an e-mail address. They are not vocabulary, and their parts must not be picked up as words.
+URL_OR_EMAIL = re.compile(r"(?:https?://|www\.)\S+|[\w.+-]+@[\w-]+\.[\w.]+")
+# The label at the start of a note line ("Note: …", "- …"), which says nothing about the line being a list entry.
+LINE_LABEL = re.compile(r"^\s*(?:[A-Za-z]{2,}\s*:|[-*•·▪◦]\s+)")
+# The separator between the word and its meaning in a word list ("word - meaning", "word\tmeaning", "word 中文").
+LIST_SEPARATOR = re.compile(r"\s+[-–—=]\s+|[\t,;]|[\u3000-\u9fff]")
+SENTENCE_ENDINGS = (".", "!", "?")
+
 # Very common English words. They are skipped when words are picked from a passage,
-# because students usually already know them. (Words shorter than 4 letters are skipped anyway.)
+# because students usually already know them.
 COMMON_WORDS = set("""
 about above across actually after again against almost alone along already also although always among another
 answer anyone anything anyway around asked away back became because become becomes been before began begin
@@ -55,6 +65,13 @@ that their them then there these they thing things think this those though thoug
 today together told took toward towards tried true trying turn under until upon used using very want wanted
 water week weeks well went were what when where whether which while white whole whose will with within without
 word words work world would write writing written wrong year years young your yours yourself
+""".split())
+
+# Three-letter function words, which can now come out of a passage ("the cat sat on the mat").
+# Only grammar words go here: "new", "day" or "see" are vocabulary a student may still want.
+COMMON_WORDS.update("""
+the and for you are but not all can her was one our out who get has had him his how its may now
+off she too two use yes yet any own did let put say why ago nor per via far few lot
 """.split())
 
 
@@ -372,6 +389,39 @@ def renderPDFPages(path: str, pageIndexes: list[int]) -> list:
 
 # ---------- Finding vocabulary in the text ----------
 
+def cleanText(text: str) -> str:
+
+    """
+    Remove the parts of a file that are not vocabulary: a byte order mark, a markdown front matter
+    block at the top, and links or e-mail addresses. Otherwise "---", "title: test" and the parts of a
+    URL make the text look like a word list and end up as cards.
+    """
+
+    text = text.replace("\ufeff", "")
+    text = FRONT_MATTER.sub("", text, count=1)
+    return URL_OR_EMAIL.sub(" ", text)
+
+
+def isSentenceLine(line: str) -> bool:
+
+    """
+    Return True for a line of prose (a sentence), which a word list never contains.
+    Such a line ends with . ! ? and is not "word - meaning" with a list separator in it.
+    """
+
+    stripped = line.strip()
+
+    if not stripped.endswith(SENTENCE_ENDINGS):
+        return False
+
+    body = LINE_LABEL.sub("", stripped)
+
+    if LIST_SEPARATOR.search(body):
+        return False
+
+    return len(body.split()) >= 2
+
+
 def lineHead(line: str) -> str:
 
     """
@@ -408,6 +458,7 @@ def looksLikeWordList(text: str) -> bool:
 
     """
     Return True if most lines are short (a word list), False if the text is a passage of sentences.
+    A line of prose is never counted as short, even when it starts with "Note:" or contains a link.
     """
 
     lines = []
@@ -420,6 +471,8 @@ def looksLikeWordList(text: str) -> bool:
 
     shortLines = 0
     for eachLine in lines:
+        if isSentenceLine(eachLine):
+            continue
         if len(lineHead(eachLine).split()) <= 3:
             shortLines += 1
 
@@ -459,6 +512,10 @@ def wordsFromList(text: str) -> list[str]:
     words = []
 
     for eachLine in text.splitlines():
+        # A line with a link or an e-mail in it is prose, not a vocabulary entry.
+        if "://" in eachLine or "@" in eachLine:
+            continue
+
         if isHeadingLine(eachLine):
             continue
 
@@ -483,7 +540,18 @@ def wordsFromPassage(text: str) -> list[str]:
     seenCapitalizedMidSentence = {}
 
     for eachMatch in re.finditer(ENGLISH_WORD, text):
-        token = re.split(r"['’]", eachMatch.group(0))[0]   # "student's" -> "student"
+        # "Note:" / "Example:" at the start of a line is a label, not vocabulary.
+        if text[eachMatch.end():eachMatch.end() + 1] == ":":
+            continue
+
+        rawToken = eachMatch.group(0).replace("’", "'")
+        token = re.split(r"[']", rawToken)[0]   # "student's" -> "student"
+
+        # "isn't" -> "is", "don't" -> "do" (never "isn" or "don").
+        if rawToken.lower().endswith("n't"):
+            token = re.sub(r"[nN]'t$", "", rawToken)
+            token = {"ca": "can", "wo": "will", "sha": "shall"}.get(token.lower(), token)
+
         lowered = token.lower()
 
         if len(lowered) < MIN_PASSAGE_WORD_LENGTH or isCommonWord(lowered):
@@ -557,6 +625,8 @@ def extractWords(text: str) -> list[str]:
     Find the vocabulary in some text: a word list gives one word per line,
     a passage gives its less common words. Duplicates are removed (ignoring case), order is kept.
     """
+
+    text = cleanText(text)
 
     if looksLikeWordList(text):
         candidates = wordsFromList(text)
