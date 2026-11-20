@@ -49,8 +49,12 @@ def main(deckPath: str | None = None) -> None:
     try:
         cards = cardDeck.loadDeck(deckPath)
     except ValueError as error:
-        print(ChatColor.paint(str(error), ChatColor.RED))
-        print(ChatColor.paint("Fix or move the file, then start again. Nothing was changed.", ChatColor.ORANGE))
+        message = str(error)
+        print(ChatColor.paint(message, ChatColor.RED))
+
+        if "damaged" in message:
+            print(ChatColor.paint("Fix or move the file, then start again. Nothing was changed.", ChatColor.ORANGE))
+
         return
 
     printWelcome(cards)
@@ -79,6 +83,10 @@ def main(deckPath: str | None = None) -> None:
             if choice in actions:
                 print()
                 actions[choice](cards, deckPath)
+
+                mergeNote = cardDeck.takeMergeNote(deckPath)
+                if mergeNote is not None:
+                    print(ChatColor.paint("  " + mergeNote, ChatColor.DARK_GRAY))
             elif choice != "":
                 print(ChatColor.paint("Please choose 1 - 7, c or q.", ChatColor.ORANGE))
 
