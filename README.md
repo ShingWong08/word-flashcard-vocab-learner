@@ -128,8 +128,11 @@ How the words are found:
 
 - **Word lists** (most lines are short, e.g. `1. ambiguous - 含糊不清` or `reluctant: not willing`):
   the word at the start of each line is taken. Title lines such as `Unit 3 vocabulary` are skipped.
-- **Passages** (articles, stories, notes): the less common words are taken, skipping short words,
-  very common words (and their forms, like `showed` or `making`) and names.
+  A line of prose (it ends with `.`, `!` or `?`), a link or an e-mail address is not a list entry.
+- **Passages** (articles, stories, notes): the less common words are taken, skipping words shorter
+  than 3 letters, very common words (and their forms, like `showed` or `making`) and names.
+  A markdown front matter block (`--- … ---`), links and e-mail addresses are removed first, so they
+  are never taken for words.
   If `LLM_API_KEY` is set, you can let the AI tutor pick the most useful words instead.
 
 Old Word `.doc` files are not supported; save them as `.docx` first.
