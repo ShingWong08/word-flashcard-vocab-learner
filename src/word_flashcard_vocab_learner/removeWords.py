@@ -229,7 +229,8 @@ def printNumberedList(numberedCards: list[Card]) -> None:
     numberWidth = len(str(len(numberedCards)))
     items = []
     for index, eachCard in enumerate(numberedCards, start=1):
-        items.append(f"{index:>{numberWidth}}. {eachCard.word}")
+        word = terminalDisplay.truncateText(eachCard.word, terminalDisplay.MAX_WORD_COLUMN_WIDTH)
+        items.append(f"{index:>{numberWidth}}. {word}")
 
     print(terminalDisplay.formatColumns(items))
     print()
@@ -343,7 +344,14 @@ def removeWords(cards: list[Card], deckPath: str) -> None:
                 print(ChatColor.paint("Nothing to undo.", ChatColor.ORANGE))
                 continue
 
-            restored = undoRemoval(cards, undoStack.pop(), deckPath)
+            try:
+                restored = undoRemoval(cards, undoStack.pop(), deckPath)
+            except cardDeck.DeckSaveError as error:
+                print(ChatColor.paint(f"  {error}", ChatColor.RED))
+                print(ChatColor.paint("The words are back on this screen, but the deck file was not updated.", ChatColor.ORANGE))
+                printUpdatedList(cards)
+                continue
+
             print(ChatColor.paint(f"Put back {plural(len(restored), 'word')}:", ChatColor.GREEN))
             print(formatWordList([eachCard.word for eachCard in restored]))
             printUpdatedList(cards)
@@ -372,7 +380,12 @@ def removeWords(cards: list[Card], deckPath: str) -> None:
             print(ChatColor.paint("Nothing was removed.", ChatColor.DARK_GRAY))
             continue
 
-        removeCards(cards, selected, deckPath)
+        try:
+            removeCards(cards, selected, deckPath)
+        except cardDeck.DeckSaveError as error:
+            print(ChatColor.paint(f"  {error}", ChatColor.RED))
+            print(ChatColor.paint("The words are removed on this screen, but the deck file was not updated.", ChatColor.ORANGE))
+
         undoStack.append(selected)
 
         print(ChatColor.paint(f"Removed {plural(len(selected), 'word')}.", ChatColor.GREEN) + ChatColor.paint("  Type u to undo.", ChatColor.DARK_GRAY))

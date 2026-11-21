@@ -19,6 +19,24 @@ EXPORT_COLUMNS = [
 ]
 
 
+# A cell starting with one of these is run as a formula by Excel / Google Sheets.
+FORMULA_STARTERS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def safeCell(value) -> object:
+
+    """
+    Stop a spreadsheet from treating text as a formula.
+    A leading apostrophe is the usual fix; the Word column is left alone so that
+    importing the file again still finds the words.
+    """
+
+    if isinstance(value, str) and value.startswith(FORMULA_STARTERS):
+        return "'" + value
+
+    return value
+
+
 def cardToRow(card: Card) -> list:
 
     """
@@ -37,9 +55,9 @@ def cardToRow(card: Card) -> list:
 
     return [
         card.word,
-        card.translation,
-        " | ".join(numberedDefinitions),
-        firstExample,
+        safeCell(card.translation),
+        safeCell(" | ".join(numberedDefinitions)),
+        safeCell(firstExample),
         card.box,
         card.nextReview,
         card.correctCount,

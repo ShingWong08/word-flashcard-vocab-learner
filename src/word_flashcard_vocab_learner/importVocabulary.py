@@ -16,6 +16,10 @@ from word_flashcard_vocab_learner.userInput import ask, askYesNo, isQuit
 
 TEXT_EXTENSIONS = [".txt", ".md", ".csv", ".tsv"]
 CSV_DELIMITERS = {".csv": ",", ".tsv": "\t"}
+
+# Column names that mean "this column holds the Chinese translation".
+TRANSLATION_HEADERS = ["chinese", "translation", "translated", "中文", "解释", "解釋", "意思"]
+WORD_HEADERS = ["word", "words", "english", "vocabulary", "单词", "單詞", "英文"]
 PDF_EXTENSIONS = [".pdf"]
 WORD_EXTENSIONS = [".docx"]
 IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff", ".webp"]
@@ -210,6 +214,55 @@ def readCSVFile(path: str, delimiter: str) -> str:
             words.append(eachRow[0].strip())
 
     return "\n".join(words)
+
+
+def readCSVTranslations(path: str, delimiter: str) -> dict[str, str]:
+
+    """
+    Read the translation column of a CSV / TSV file, e.g. a deck exported from this app.
+    Returns {word (casefolded): translation}; an empty dict if the file has no such column.
+    The header row decides the columns, so column 1 is only assumed to be the word
+    when the header does not say otherwise.
+    """
+
+    text = readTextFile(path)
+    rows = list(csv.reader(io.StringIO(text), delimiter=delimiter))
+
+    if len(rows) == 0:
+        return {}
+
+    header = [eachCell.strip().casefold() for eachCell in rows[0]]
+
+    translationIndex = -1
+    for index, eachHeader in enumerate(header):
+        if eachHeader in TRANSLATION_HEADERS:
+            translationIndex = index
+            break
+
+    if translationIndex == -1:
+        return {}
+
+    wordIndex = 0
+    for index, eachHeader in enumerate(header):
+        if eachHeader in WORD_HEADERS:
+            wordIndex = index
+            break
+
+    translations = {}
+    for eachRow in rows[1:]:
+        if len(eachRow) <= max(wordIndex, translationIndex):
+            continue
+
+        word = eachRow[wordIndex].strip()
+        translation = eachRow[translationIndex].strip()
+
+        # The exported header row is not a word.
+        if word == "" or translation == "" or word.casefold() == header[wordIndex]:
+            continue
+
+        translations[word.casefold()] = translation
+
+    return translations
 
 
 def readPDF(path: str) -> str:
@@ -719,7 +772,8 @@ def askWhichWords(words: list[str]) -> list[str] | None:
     numberWidth = len(str(len(words)))
     items = []
     for index, eachWord in enumerate(words, start=1):
-        items.append(f"{index:>{numberWidth}}. {eachWord}")
+        shownWord = terminalDisplay.truncateText(eachWord, terminalDisplay.MAX_WORD_COLUMN_WIDTH)
+        items.append(f"{index:>{numberWidth}}. {shownWord}")
 
     print(terminalDisplay.formatColumns(items))
     print()
@@ -770,7 +824,7 @@ def createCard(word: str) -> tuple[Card | None, str]:
     return Card.fromLookup(result, translation), ""
 
 
-def addWords(words: list[str], cards: list[Card], deckPath: str) -> dict:
+def addWords(words: list[str], cards: list[Card], deckPath: str, translations: dict[str, str] | None = None) -> dict:
 
     """
     Look up each word and add it to the deck, showing progress line by line.
@@ -793,12 +847,25 @@ def addWords(words: list[str], cards: list[Card], deckPath: str) -> dict:
             print(start + ChatColor.paint(f"skipped: {reason}", ChatColor.ORANGE))
             continue
 
+        # A translation column in the user's own CSV wins over the AI tutor.
+        if translations is not None:
+            translation = translations.get(card.word.casefold(), "")
+            if translation != "":
+                card.translation = translation
+
         if not cardDeck.addCard(cards, card):
             summary["skipped"] += 1
             print(start + ChatColor.paint(f'skipped: "{card.word}" is already in your deck', ChatColor.DARK_GRAY))
             continue
 
-        cardDeck.saveDeck(cards, deckPath)
+        try:
+            cardDeck.saveDeck(cards, deckPath)
+        except cardDeck.DeckSaveError as error:
+            print(start + ChatColor.paint(f"skipped: {error}", ChatColor.RED))
+            summary["skipped"] += 1
+            cards.remove(card)
+            break
+
         summary["added"] += 1
 
         addedText = ChatColor.paint("added", ChatColor.GREEN)
@@ -862,6 +929,11 @@ def importVocabulary(cards: list[Card], deckPath: str) -> None:
         print(ChatColor.paint(str(error), ChatColor.RED))
         return
 
+    translations = {}
+    extension = os.path.splitext(path)[1].lower()
+    if extension in CSV_DELIMITERS:
+        translations = readCSVTranslations(path, CSV_DELIMITERS[extension])
+
     words = extractWords(text)
     words = chooseWordsWithAI(text, words)
 
@@ -897,7 +969,7 @@ def importVocabulary(cards: list[Card], deckPath: str) -> None:
 
     terminalDisplay.printHeading(f"Adding {len(selectedWords)} words")
 
-    summary = addWords(selectedWords, cards, deckPath)
+    summary = addWords(selectedWords, cards, deckPath, translations)
 
     print()
     print(ChatColor.paint(f"Added {summary['added']}, skipped {summary['skipped']}.", ChatColor.BOLD, ChatColor.GREEN))

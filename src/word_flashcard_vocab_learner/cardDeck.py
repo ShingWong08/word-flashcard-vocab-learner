@@ -16,6 +16,18 @@ _knownDecks: dict[str, list[dict]] = {}
 # Note for the user, set by saveDeck when it had to merge in changes made elsewhere.
 _mergeNotes: dict[str, str] = {}
 
+# Size and modification time of each deck file as this program last saw it, keyed by _deckKey(path).
+# When they are unchanged, saveDeck does not have to read the whole file again to look for another window.
+_fileStamps: dict[str, tuple[int, int]] = {}
+
+
+class DeckSaveError(Exception):
+
+    """
+    Raised when the deck file cannot be written, e.g. the folder is read-only or the disk is full.
+    The message is meant for the user; the cards in memory are not lost.
+    """
+
 
 def defaultDeckPath() -> str:
 
@@ -27,7 +39,7 @@ def defaultDeckPath() -> str:
 
     customPath = os.environ.get(DECK_PATH_ENV)
     if customPath:
-        return customPath
+        return os.path.expanduser(customPath)
 
     return os.path.join(os.path.expanduser("~"), ".word_flashcard", "deck.json")
 
@@ -74,8 +86,12 @@ def saveDeck(cards: list[Card], path: str) -> None:
     key = _deckKey(path)
     knownData = _knownDecks.get(key)
     mergedElsewhere = False
+    stamp = _fileStamp(path)
 
-    if knownData is not None and os.path.exists(path):
+    # Read the file again only when another window may have changed it since we last read or wrote it.
+    unchangedSinceLastTime = stamp is not None and stamp == _fileStamps.get(key)
+
+    if knownData is not None and stamp is not None and not unchangedSinceLastTime:
         try:
             fileData = _readDeckData(path)
         except ValueError:
@@ -97,6 +113,7 @@ def saveDeck(cards: list[Card], path: str) -> None:
         _applyMergedData(cards, data)
 
     _knownDecks[key] = data
+    _fileStamps[key] = _fileStamp(path)
 
 
 def takeMergeNote(path: str) -> str | None:
@@ -190,6 +207,24 @@ def _applyMergedData(cards: list[Card], mergedData: list[dict]) -> None:
             del cards[index]
 
 
+def _fileStamp(path: str) -> tuple[int, int] | None:
+
+    """
+    Return (modification time, size) of a deck file, or None when it does not exist.
+    Used to skip re-reading a deck that this program itself last wrote.
+    """
+
+    if not os.path.exists(path):
+        return None
+
+    try:
+        fileStat = os.stat(path)
+    except OSError:
+        return None
+
+    return (fileStat.st_mtime_ns, fileStat.st_size)
+
+
 def _readDeckData(path: str) -> list[dict]:
 
     """
@@ -219,6 +254,8 @@ def _readDeckData(path: str) -> list[dict]:
 
     except OSError as error:
         raise ValueError(f"The deck file '{path}' cannot be read: {error}") from error
+
+    _fileStamps[_deckKey(path)] = _fileStamp(path)
 
     if not content:
         return []
@@ -252,11 +289,16 @@ def _writeDeckData(data: list[dict], path: str) -> None:
 
         os.replace(temporaryPath, path)
 
-    except Exception:
+    except OSError as error:
         if os.path.exists(temporaryPath):
-            os.remove(temporaryPath)
+            try:
+                os.remove(temporaryPath)
+            except OSError:
+                pass
 
-        raise
+        reason = error.strerror or str(error)
+        raise DeckSaveError(f"The deck file '{path}' cannot be written: {reason.lower() if reason else error}.") from error
+
 
 
 def _deckKey(path: str) -> str:

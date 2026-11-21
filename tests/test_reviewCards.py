@@ -198,3 +198,17 @@ def test_available_modes(monkeypatch):
         reviewCards.MODE_SPEAKING,
         reviewCards.MODE_SENTENCE,
     ]
+
+
+def test_mask_word_does_not_hide_the_start_of_a_longer_word():
+    assert reviewCards.maskWord("The category is broad.", "cat") == "The category is broad."
+    assert reviewCards.maskWord("Two categories, one cat.", "cat") == "Two categories, one ____."
+    assert reviewCards.maskWord("I have two cats.", "cat") == "I have two ____."
+    assert reviewCards.maskWord("She was cataloguing the cats.", "cat") == "She was cataloguing the ____."
+
+
+def test_normalize_answer_ignores_curly_quotes_and_hyphens():
+    assert reviewCards.normalizeAnswer("Don’t") == reviewCards.normalizeAnswer("don't")
+    assert reviewCards.normalizeAnswer("ice-cream") == reviewCards.normalizeAnswer("ice cream")
+    assert reviewCards.isSpellingCorrect("Don’t", "don't")
+    assert reviewCards.isSpellingCorrect("Ice-Cream", "ice cream")

@@ -173,7 +173,10 @@ def formatWordDefinition(result: dict) -> str:
         lines.append("")
         lines.append(terminalDisplay.wrapParagraph(eachDefinition, number, prefixStyles=(ChatColor.DARK_GRAY,)))
 
-        for eachExample in examples[index]:
+        # A hand-edited card may have fewer example lists than definitions.
+        eachExamples = examples[index] if index < len(examples) else []
+
+        for eachExample in eachExamples:
             lines.append(terminalDisplay.wrapParagraph(
                 eachExample,
                 exampleIndent + "> ",
