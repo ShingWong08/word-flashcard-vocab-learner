@@ -1,6 +1,6 @@
 """A lightweight CLI flashcard tool for vocabulary learning and review."""
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
 import os
 from datetime import date
@@ -435,7 +435,8 @@ def showDeck(cards: list[Card], deckPath: str) -> None:
 
     # The numbers are the same as on the "Remove words" screen.
     header = f"  {'#':>{numberWidth}}  {'Word':<{wordWidth}}  Box  {'Next review':<11}  Score  Chinese"
-    narrow = terminalDisplay.screenWidth() < NARROW_DECK_WIDTH
+    terminalWidth = terminalDisplay.screenWidth()
+    narrow = terminalWidth < NARROW_DECK_WIDTH
 
     pages = []
     for start in range(0, len(sortedCards), DECK_PAGE_SIZE):
@@ -465,7 +466,8 @@ def showDeck(cards: list[Card], deckPath: str) -> None:
                 print(line)
 
                 if eachCard.translation != "":
-                    print("      " + ChatColor.paint(eachCard.translation, ChatColor.GREEN))
+                    translationWidth = max(4, terminalWidth - 6)
+                    print("      " + ChatColor.paint(terminalDisplay.truncateText(eachCard.translation, translationWidth), ChatColor.GREEN))
                 continue
 
             if isDue:
@@ -473,7 +475,10 @@ def showDeck(cards: list[Card], deckPath: str) -> None:
             else:
                 nextReview = f"{eachCard.nextReview:<11}"
 
-            row = f"  {number}  {word:<{wordWidth}}  {eachCard.box:>3}  {nextReview}  {score:>5}  {eachCard.translation}"
+            # The translation is the last column, so it gets whatever room is left.
+            translationWidth = max(4, terminalWidth - (numberWidth + wordWidth + 31))
+            translation = terminalDisplay.truncateText(eachCard.translation, translationWidth)
+            row = f"  {number}  {word:<{wordWidth}}  {eachCard.box:>3}  {nextReview}  {score:>5}  {translation}"
             print(row)
 
         print()

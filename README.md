@@ -89,7 +89,8 @@ word-flashcard
 3. **Import words from a file**: see [Importing vocabulary](#importing-vocabulary).
 4. **View my deck**: see every word with its number, box (1–5), next review date, score and translation.
    A long deck is shown 30 words per page (Enter = next page, `q` = back), and a narrow terminal shows
-   one card per line instead of a table.
+   one card per line instead of a table. A very long word or translation is shortened with `…` so the
+   columns still line up.
 5. **Progress**: words due today and this week, accuracy, cards per box and the words to practise more.
 6. **Export deck to CSV**: save your deck as a CSV file. It opens in Excel with Chinese shown correctly,
    and can be imported into Quizlet or Anki, or back into this app.

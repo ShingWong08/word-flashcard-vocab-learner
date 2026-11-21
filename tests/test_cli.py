@@ -129,6 +129,39 @@ def test_view_deck(capsys, tmp_path, typeAnswers):
     assert "貓" in out
 
 
+LONG_TRANSLATION = "這是一個非常長的中文翻譯，用來測試表格會不會超出畫面寬度，看起來會折行"
+
+
+def test_view_deck_shortens_a_long_translation_to_fit_the_table(capsys, tmp_path, typeAnswers, monkeypatch):
+    monkeypatch.setenv("COLUMNS", "80")
+    longWord = "pneumonoultramicroscopicsilicovolcanoconiosis"
+    cards = [Card(longWord, ["a lung disease"], [[]], LONG_TRANSLATION), Card("cat", ["a pet"], [[]], LONG_TRANSLATION)]
+    cardDeck.saveDeck(cards, deckPath(tmp_path))
+    typeAnswers(["4", "q"])
+
+    app.main(deckPath(tmp_path))
+
+    out = capsys.readouterr().out
+    tableLines = out.split("Your deck:")[1].split("Saved in:")[0].splitlines()
+    assert max(len(eachLine) for eachLine in tableLines) <= 80    # no row wraps past the edge
+    assert "…" in out                                             # the translation is shortened, not dropped
+    assert "這是一個非常長的中文翻譯" in out
+
+
+def test_view_deck_shortens_a_long_translation_in_a_narrow_terminal(capsys, tmp_path, typeAnswers, monkeypatch):
+    monkeypatch.setenv("COLUMNS", "40")
+    cardDeck.saveDeck([Card("cat", ["a pet"], [[]], LONG_TRANSLATION)], deckPath(tmp_path))
+    typeAnswers(["4", "q"])
+
+    app.main(deckPath(tmp_path))
+
+    out = capsys.readouterr().out
+    translationLines = [eachLine for eachLine in out.splitlines() if eachLine.strip().startswith("這是一個")]
+    assert len(translationLines) == 1
+    assert len(translationLines[0]) <= 40
+    assert translationLines[0].strip().endswith("…")
+
+
 def test_remove_word(capsys, tmp_path, typeAnswers):
     saveCat(tmp_path)
     typeAnswers(["7", "CAT", "y", "", "q"])
