@@ -263,3 +263,28 @@ def test_save_still_merges_when_another_window_wrote_in_the_meantime(tmp_path):
 
     # This window's cards come first, then the words that only the other window has.
     assert [eachCard.word for eachCard in cardDeck.loadDeck(path)] == ["cat", "bird", "dog"]
+
+
+def test_a_hand_edited_deck_with_wrong_types_still_loads(tmp_path):
+    path = tmp_path / "deck.json"
+    path.write_text('[{"word": "cat", "definitions": null, "examples": null, "correctCount": "2"}]', encoding="utf-8")
+
+    cards = cardDeck.loadDeck(str(path))
+
+    assert cards[0].word == "cat"
+    assert cards[0].definitions == []
+    assert cards[0].correctCount == 2
+
+
+def test_save_over_a_deck_that_became_unreadable_keeps_the_session(tmp_path):
+    path = str(tmp_path / "deck.json")
+    cardDeck.saveDeck([makeCard("cat")], path)
+    cards = cardDeck.loadDeck(path)    # the program knows the deck
+
+    with open(path, "w", encoding="utf-8") as deckFile:
+        deckFile.write('["cat"]')      # another editor damaged the file
+
+    cardDeck.saveDeck(cards + [makeCard("dog")], path)    # must not raise
+
+    assert [eachCard.word for eachCard in cardDeck.loadDeck(path)] == ["cat", "dog"]
+    assert os.path.exists(path + ".damaged")

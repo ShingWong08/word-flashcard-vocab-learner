@@ -212,3 +212,13 @@ def test_normalize_answer_ignores_curly_quotes_and_hyphens():
     assert reviewCards.normalizeAnswer("ice-cream") == reviewCards.normalizeAnswer("ice cream")
     assert reviewCards.isSpellingCorrect("Don’t", "don't")
     assert reviewCards.isSpellingCorrect("Ice-Cream", "ice cream")
+
+
+def test_card_back_says_when_no_meaning_was_saved():
+    card = makeCard("cat")
+    card.definitions = []
+
+    text = reviewCards.formatCardBack(card)
+
+    assert "No meaning saved" in text
+    assert "No definition found" not in text

@@ -181,6 +181,11 @@ Each card sits in a box from 1 to 5. A right answer moves it up one box, a wrong
 
 The cache folders are created in the folder you run `word-flashcard` from.
 
+If you edit `deck.json` by hand, a missing or wrong value (a null meaning, a box outside 1–5, a counter
+saved as text) is repaired when the deck loads, so one bad entry does not stop the app. If the file
+cannot be read at all while the app is running, it is copied to `deck.json.damaged` before the deck in
+memory is saved over it, so nothing is lost silently.
+
 ## Project structure
 
 | Module | Purpose |

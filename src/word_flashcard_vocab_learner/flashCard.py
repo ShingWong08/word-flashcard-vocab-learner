@@ -1,5 +1,49 @@
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, field
 from datetime import date
+
+
+def _asCount(value: object) -> int:
+
+    """
+    Turn a counter loaded from a deck file into a whole number.
+    A value that is missing, null or not a number counts as 0, so a hand-edited deck cannot break the screens.
+    """
+
+    if isinstance(value, bool):
+        return 0
+
+    if isinstance(value, (int, float)):
+        return max(0, int(value))
+
+    if isinstance(value, str) and value.strip().lstrip("-").isdigit():
+        return max(0, int(value.strip()))
+
+    return 0
+
+
+def _asBox(value: object) -> int:
+
+    """
+    Turn the Leitner box loaded from a deck file into 1-5.
+    """
+
+    box = _asCount(value)
+    return min(5, max(1, box))
+
+
+def _asDate(value: object) -> str:
+
+    """
+    Return an ISO date loaded from a deck file, or today when it is missing or not a date.
+    """
+
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value.strip()).isoformat()
+        except ValueError:
+            pass
+
+    return todayISO()
 
 
 def todayISO() -> str:
@@ -64,17 +108,41 @@ class Card:
 
         """
         Create a card from a dict loaded from the deck file.
-        Unknown keys are ignored, so older or newer deck files still load.
+        Unknown keys are ignored, so older or newer deck files still load,
+        and a hand-edited value of the wrong type or a missing value is repaired
+        instead of breaking the screens later.
+        Raises ValueError when the entry has no word at all.
         """
 
-        knownFields = []
-        for eachField in fields(cls):
-            knownFields.append(eachField.name)
+        if not isinstance(data, dict):
+            raise ValueError("one entry of the deck file is not a card")
 
-        values = {}
-        for key, value in data.items():
-            if key in knownFields:
-                values[key] = value
+        word = data.get("word")
+        if not isinstance(word, str) or word.strip() == "":
+            raise ValueError("one card of the deck file has no word")
+
+        values = {"word": word.strip()}
+
+        definitions = data.get("definitions")
+        values["definitions"] = [str(eachDefinition) for eachDefinition in definitions] if isinstance(definitions, list) else []
+
+        examples = data.get("examples")
+        if isinstance(examples, list):
+            values["examples"] = [
+                [str(eachLine) for eachLine in eachExample] if isinstance(eachExample, list) else []
+                for eachExample in examples
+            ]
+        else:
+            values["examples"] = []
+
+        translation = data.get("translation")
+        values["translation"] = "" if not isinstance(translation, str) else translation
+
+        values["box"] = _asBox(data.get("box"))
+        values["nextReview"] = _asDate(data.get("nextReview"))
+        values["correctCount"] = _asCount(data.get("correctCount"))
+        values["wrongCount"] = _asCount(data.get("wrongCount"))
+        values["addedOn"] = _asDate(data.get("addedOn"))
 
         return cls(**values)
 
