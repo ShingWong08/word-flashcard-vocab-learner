@@ -46,6 +46,8 @@ LINE_LABEL = re.compile(r"^\s*(?:[A-Za-z]{2,}\s*:|[-*•·▪◦]\s+)")
 # The separator between the word and its meaning in a word list ("word - meaning", "word\tmeaning", "word 中文").
 LIST_SEPARATOR = re.compile(r"\s+[-–—=]\s+|[\t,;]|[\u3000-\u9fff]")
 SENTENCE_ENDINGS = (".", "!", "?")
+# Chinese characters and full-width punctuation: a cell with these is a translation, not an English meaning.
+CHINESE_TEXT = re.compile(r"[\u3000-\u303f\u3400-\u9fff\uff00-\uffef]")
 
 # Very common English words. They are skipped when words are picked from a passage,
 # because students usually already know them.
@@ -234,13 +236,23 @@ def readCSVTranslations(path: str, delimiter: str) -> dict[str, str]:
     header = [eachCell.strip().casefold() for eachCell in rows[0]]
 
     translationIndex = -1
+    hasHeader = True
     for index, eachHeader in enumerate(header):
         if eachHeader in TRANSLATION_HEADERS:
             translationIndex = index
             break
 
     if translationIndex == -1:
-        return {}
+        # No header names the translation column, e.g. "cat,貓" with no header row.
+        # A second column holding Chinese is still taken as the translation.
+        if any(len(eachRow) > 1 and CHINESE_TEXT.search(eachRow[1]) for eachRow in rows):
+            translationIndex = 1
+            dataRows = rows
+            hasHeader = False
+        else:
+            return {}
+    else:
+        dataRows = rows[1:]
 
     wordIndex = 0
     for index, eachHeader in enumerate(header):
@@ -249,7 +261,7 @@ def readCSVTranslations(path: str, delimiter: str) -> dict[str, str]:
             break
 
     translations = {}
-    for eachRow in rows[1:]:
+    for eachRow in dataRows:
         if len(eachRow) <= max(wordIndex, translationIndex):
             continue
 
@@ -257,7 +269,10 @@ def readCSVTranslations(path: str, delimiter: str) -> dict[str, str]:
         translation = eachRow[translationIndex].strip()
 
         # The exported header row is not a word.
-        if word == "" or translation == "" or word.casefold() == header[wordIndex]:
+        if word == "" or translation == "":
+            continue
+
+        if hasHeader and word.casefold() == header[wordIndex]:
             continue
 
         translations[word.casefold()] = translation

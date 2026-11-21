@@ -146,11 +146,14 @@ def formatCardBack(card: Card) -> str:
     The back of the card: numbered definitions with examples, then the Chinese translation.
     """
 
-    text = formatWordDefinition({
-        "word": card.word,
-        "definitions": card.definitions,
-        "examples": card.examples,
-    })
+    if len(card.definitions) == 0:
+        text = INDENT + ChatColor.paint("No meaning saved for this card. Press 8 on the main menu to add one.", ChatColor.ORANGE)
+    else:
+        text = formatWordDefinition({
+            "word": card.word,
+            "definitions": card.definitions,
+            "examples": card.examples,
+        })
 
     translationLine = formatTranslation(card)
     if translationLine != "":

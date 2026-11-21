@@ -1,6 +1,6 @@
 """A lightweight CLI flashcard tool for vocabulary learning and review."""
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 import os
 from datetime import date

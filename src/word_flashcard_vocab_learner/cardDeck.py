@@ -54,15 +54,11 @@ def loadDeck(path: str) -> list[Card]:
 
     data = _readDeckData(path)
 
-    try:
-        cards = []
-        for eachCardData in data:
-            cards.append(Card.fromDict(eachCardData))
+    cards = _cardsFromData(data, path)
 
-    except (TypeError, AttributeError, KeyError, ValueError) as error:
-        raise ValueError(f"The deck file '{path}' is damaged: {error}") from error
-
-    _knownDecks[_deckKey(path)] = data
+    # Keep the repaired card data, so the next save writes back what the screens show
+    # and does not compare against a hand-edited entry for ever.
+    _knownDecks[_deckKey(path)] = [eachCard.toDict() for eachCard in cards]
 
     return cards
 
@@ -93,7 +89,7 @@ def saveDeck(cards: list[Card], path: str) -> None:
 
     if knownData is not None and stamp is not None and not unchangedSinceLastTime:
         try:
-            fileData = _readDeckData(path)
+            fileData = _normaliseDeckData(_readDeckData(path), path)
         except ValueError:
             # The file was replaced by something this program cannot read.
             # Keep a copy of it before it gets overwritten.
@@ -223,6 +219,36 @@ def _fileStamp(path: str) -> tuple[int, int] | None:
         return None
 
     return (fileStat.st_mtime_ns, fileStat.st_size)
+
+
+def _cardsFromData(data: list, path: str) -> list[Card]:
+
+    """
+    Build Card objects from the dicts read from a deck file.
+    Repairs hand-edited values that are the wrong type, and raises ValueError
+    when an entry is not a card at all.
+    """
+
+    try:
+        cards = []
+        for eachCardData in data:
+            cards.append(Card.fromDict(eachCardData))
+
+    except (TypeError, AttributeError, KeyError, ValueError) as error:
+        raise ValueError(f"The deck file '{path}' is damaged: {error}") from error
+
+    return cards
+
+
+def _normaliseDeckData(data: list, path: str) -> list[dict]:
+
+    """
+    The card dicts read from a deck file, repaired to what this program would write.
+    Used to compare with what this window last read, so a hand-edited but usable
+    file does not look like a change made by another window on every save.
+    """
+
+    return [eachCard.toDict() for eachCard in _cardsFromData(data, path)]
 
 
 def _readDeckData(path: str) -> list[dict]:

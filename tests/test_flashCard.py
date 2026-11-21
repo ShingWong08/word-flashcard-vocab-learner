@@ -41,3 +41,39 @@ def test_from_dict_ignores_unknown_keys_and_fills_defaults():
     assert card.word == "cat"
     assert card.examples == []
     assert card.box == 1
+
+
+def test_from_dict_repairs_missing_or_wrong_values():
+    card = Card.fromDict({
+        "word": "  cat  ",
+        "definitions": None,
+        "examples": None,
+        "translation": 5,
+        "box": None,
+        "nextReview": "not a date",
+        "correctCount": "2",
+        "wrongCount": None,
+        "addedOn": None,
+    })
+
+    assert card.word == "cat"
+    assert card.definitions == []
+    assert card.examples == []
+    assert card.translation == ""
+    assert card.box == 1
+    assert card.nextReview == date.today().isoformat()
+    assert card.correctCount == 2
+    assert card.wrongCount == 0
+    assert card.addedOn == date.today().isoformat()
+
+
+def test_from_dict_keeps_the_box_inside_one_to_five():
+    assert Card.fromDict({"word": "cat", "definitions": [], "box": 0}).box == 1
+    assert Card.fromDict({"word": "cat", "definitions": [], "box": 9}).box == 5
+
+
+def test_from_dict_needs_a_word():
+    import pytest
+
+    with pytest.raises(ValueError, match="no word"):
+        Card.fromDict({"definitions": ["a pet"]})

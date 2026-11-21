@@ -426,3 +426,17 @@ def test_import_fills_the_chinese_column_from_the_users_csv(tmp_path, typeAnswer
     assert "Added 1, skipped 0." in capsys.readouterr().out
     assert cards[0].word == "cat"
     assert cards[0].translation == "貓"
+
+
+def test_read_csv_translations_without_a_header_row(tmp_path):
+    path = tmp_path / "words.csv"
+    path.write_text("cat,貓\ndog,狗\n", encoding="utf-8")
+
+    assert importVocabulary.readCSVTranslations(str(path), ",") == {"cat": "貓", "dog": "狗"}
+
+
+def test_read_csv_translations_ignores_an_english_second_column(tmp_path):
+    path = tmp_path / "words.csv"
+    path.write_text("cat,a small pet\ndog,a pet that barks\n", encoding="utf-8")
+
+    assert importVocabulary.readCSVTranslations(str(path), ",") == {}
