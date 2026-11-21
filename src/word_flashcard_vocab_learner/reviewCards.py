@@ -46,7 +46,9 @@ def maskWord(text: str, word: str) -> str:
     Example: maskWord("I have two cats.", "cat") -> "I have two ____."
     """
 
-    pattern = r"\b" + re.escape(word) + r"\w*"
+    # Only a regular ending may follow the word. "\w*" would also hide the start of a
+    # longer word: "cat" must not blank "category".
+    pattern = r"\b" + re.escape(word) + r"(?:s|es|ed|ing|er|est|'s)?(?![\w])"
     return re.sub(pattern, MASK, text, flags=re.IGNORECASE)
 
 
@@ -72,12 +74,18 @@ def makeHint(word: str) -> str:
     return "".join(hintCharacters) + f" ({letterCount} letters)"
 
 
+# Curly quotes and dashes people paste from Word or a phone keyboard.
+QUOTE_TRANSLATION = str.maketrans({"’": "'", "‘": "'", "“": '"', "”": '"', "—": " ", "–": " "})
+
+
 def normalizeAnswer(text: str) -> str:
 
     """
     Make a typed answer easy to compare: lowercase, single spaces, no full stop at the end.
     """
 
+    text = text.translate(QUOTE_TRANSLATION)
+    text = text.replace("-", " ")
     text = " ".join(text.split())
     text = text.strip(".!?,;:\"'")
 

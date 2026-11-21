@@ -385,3 +385,44 @@ def test_run_import_when_all_words_are_known(tmp_path, typeAnswers, capsys):
     importVocabulary.importVocabulary([Card("cat", ["a pet"])], str(tmp_path / "deck.json"))
 
     assert "already in your deck" in capsys.readouterr().out
+
+
+def test_read_csv_translations_uses_the_chinese_column(tmp_path):
+    from word_flashcard_vocab_learner import exportDeckToCSV
+
+    path = tmp_path / "deck.csv"
+    exportDeckToCSV.exportDeckToCSV(
+        [Card("cat", ["a pet"], [["My cat is asleep."]], "貓", nextReview="2026-12-01")],
+        str(path),
+    )
+
+    translations = importVocabulary.readCSVTranslations(str(path), ",")
+
+    assert translations == {"cat": "貓"}
+
+
+def test_read_csv_translations_without_a_translation_column(tmp_path):
+    path = tmp_path / "words.csv"
+    path.write_text("Word\ncat\ndog\n", encoding="utf-8")
+
+    assert importVocabulary.readCSVTranslations(str(path), ",") == {}
+
+
+def test_import_fills_the_chinese_column_from_the_users_csv(tmp_path, typeAnswers, capsys, monkeypatch):
+    from word_flashcard_vocab_learner import exportDeckToCSV
+
+    csvPath = tmp_path / "my-words.csv"
+    exportDeckToCSV.exportDeckToCSV(
+        [Card("cat", ["a pet"], [["My cat is asleep."]], "貓")],
+        str(csvPath),
+    )
+    monkeypatch.setattr(dictionary, "getWordDefinition", lambda word: {"word": word, "definitions": ["a pet"], "examples": [[]]})
+
+    cards = []
+    typeAnswers([str(csvPath), "y", ""])
+
+    importVocabulary.importVocabulary(cards, str(tmp_path / "deck.json"))
+
+    assert "Added 1, skipped 0." in capsys.readouterr().out
+    assert cards[0].word == "cat"
+    assert cards[0].translation == "貓"

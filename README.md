@@ -9,6 +9,8 @@ Look up a word, save it as a flashcard, and review it with spaced repetition unt
 - **Chinese translations** from an LLM (optional, needs `LLM_API_KEY`)
 - **Pronunciation** with ElevenLabs text-to-speech (optional, needs `ELEVENLABS_API_KEY`)
 - **Flashcard deck** saved as JSON, so your progress is kept between sessions
+- **Edit a card** after adding it: fix the spelling, the Chinese translation or the meaning
+- **Practise one word** whenever you want, without waiting for its review date
 - **Import vocabulary** from text, CSV, PDF, Word (`.docx`) and scanned pages / photos (OCR)
 - **Progress screen** with accuracy, cards per box and the words you get wrong most often
 - **Export** your deck to CSV for Excel, Google Sheets, Quizlet or Anki
@@ -52,7 +54,7 @@ Copy `.env.example` to `.env` and fill in the keys you need. `.env` is git-ignor
 | --- | --- |
 | `LLM_API_KEY` | Chinese translations and sentence feedback (`genAITutor`, via `connectGenAI`) |
 | `ELEVENLABS_API_KEY` | Pronunciation, Listening and Speaking modes (`textToSpeech`, `speechToText`) |
-| `WORD_FLASHCARD_DECK` | Optional. Where the deck is saved. Default: `~/.word_flashcard/deck.json` |
+| `WORD_FLASHCARD_DECK` | Optional. Where the deck is saved. Default: `~/.word_flashcard/deck.json`. A leading `~` is expanded |
 | `TESSERACT_CMD` | Optional. Full path of `tesseract.exe` if Tesseract OCR is not on your `PATH` |
 
 Every key is optional: without them the app still looks up words and reviews them in Meaning and Spelling modes.
@@ -73,20 +75,34 @@ word-flashcard
   5. Progress
   6. Export deck to CSV
   7. Remove words
+  8. Edit a card
+  9. Practise one word
 
   c. Clear the screen
   q. Quit
 ```
 
 1. **Look up and add words**: type a word to see its definitions, then press `y` to add it to your deck.
-2. **Review cards**: review the cards due today in the mode you choose. Wrong answers are asked once more
-   at the end of the session. If nothing is due, you can practise all cards without changing your progress.
+2. **Review cards**: review the cards due today in the mode you choose, 20 cards at a time. Wrong answers
+   are asked once more at the end of the session. When more cards are due, you can carry on with the next
+   20 straight after the summary. If nothing is due, you can practise all cards without changing your progress.
 3. **Import words from a file**: see [Importing vocabulary](#importing-vocabulary).
 4. **View my deck**: see every word with its number, box (1–5), next review date, score and translation.
+   A long deck is shown 30 words per page (Enter = next page, `q` = back), and a narrow terminal shows
+   one card per line instead of a table.
 5. **Progress**: words due today and this week, accuracy, cards per box and the words to practise more.
 6. **Export deck to CSV**: save your deck as a CSV file. It opens in Excel with Chinese shown correctly,
    and can be imported into Quizlet or Anki, or back into this app.
 7. **Remove words**: see [Removing words](#removing-words).
+8. **Edit a card**: type the word and press Enter on the questions you want to keep. You can change the
+   spelling (a word that is already in the deck is refused), the Chinese translation and the meaning
+   (one line). Type `-` to clear the translation or the meaning.
+9. **Practise one word**: type the word, pick a mode, and review that card now. Its box and review date
+   change like a normal review.
+
+Your answers are saved after every card. If the deck file cannot be written (for example the folder is
+read-only), the app says so once and keeps going, so the answers of that session are not lost; it tells
+you that the progress was not saved when the session ends.
 
 Type `c` (or `clear` / `cls`) to clear the screen.
 
@@ -119,7 +135,7 @@ is set up) before it is added.
 | File | How it is read | Needs |
 | --- | --- | --- |
 | `.txt`, `.md` | As text | – |
-| `.csv`, `.tsv` | First column (e.g. a deck exported from this app, Excel or Quizlet) | – |
+| `.csv`, `.tsv` | First column for the words, plus the Chinese column when the file has one | – |
 | `.pdf` | Text of every page; scanned pages are read with OCR | `.[documents]`, OCR for scans |
 | `.docx` | Paragraphs and tables | `.[documents]` |
 | `.png`, `.jpg`, `.jpeg`, `.bmp`, `.gif`, `.tif`, `.tiff`, `.webp` | OCR | `.[ocr]` and Tesseract |
@@ -134,6 +150,10 @@ How the words are found:
   A markdown front matter block (`--- … ---`), links and e-mail addresses are removed first, so they
   are never taken for words.
   If `LLM_API_KEY` is set, you can let the AI tutor pick the most useful words instead.
+
+A CSV exported from this app has a `Chinese` column: importing it again fills in the translation
+alongside the dictionary meanings. Only words missing from your deck are added, so importing the same
+file twice changes nothing.
 
 Old Word `.doc` files are not supported; save them as `.docx` first.
 
@@ -171,7 +191,7 @@ The cache folders are created in the folder you run `word-flashcard` from.
 | `leitnerScheduler.py` | Leitner boxes and review dates |
 | `reviewCards.py` | Review sessions (`reviewCards()`) and answer checking |
 | `importVocabulary.py` | Read text, CSV, PDF, Word and images (OCR) and find the vocabulary in them (`importVocabulary()`) |
-| `exportDeckToCSV.py` | Export the deck to CSV (`exportDeckToCSV()`) |
+| `exportDeckToCSV.py` | Export the deck to CSV (`exportDeckToCSV()`); text that looks like a formula is made harmless |
 | `removeWords.py` | The "Remove words" screen (`removeWords()`: by word, number, pattern, box or all, with undo) |
 | `showProgress.py` | Progress screen (`showProgress()`) |
 | `genAITutor.py` | Chinese translation, sentence feedback and picking vocabulary from a passage (uses `connectGenAI`) |

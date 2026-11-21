@@ -1,6 +1,6 @@
 """A lightweight CLI flashcard tool for vocabulary learning and review."""
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 import os
 from datetime import date
@@ -31,7 +31,9 @@ load_dotenv(find_dotenv(usecwd=True))
 
 
 CLEAR_COMMANDS = ["c", "clear", "cls"]
-MAX_DECK_WORD_WIDTH = 24
+MAX_DECK_WORD_WIDTH = terminalDisplay.MAX_WORD_COLUMN_WIDTH
+DECK_PAGE_SIZE = 30
+NARROW_DECK_WIDTH = 70
 
 
 def main(deckPath: str | None = None) -> None:
@@ -67,6 +69,8 @@ def main(deckPath: str | None = None) -> None:
         "5": lambda cards, deckPath: showProgress.showProgress(cards),
         "6": exportDeck,
         "7": removeWords.removeWords,
+        "8": editCard,
+        "9": practiseOneWord,
     }
 
     try:
@@ -88,7 +92,7 @@ def main(deckPath: str | None = None) -> None:
                 if mergeNote is not None:
                     print(ChatColor.paint("  " + mergeNote, ChatColor.DARK_GRAY))
             elif choice != "":
-                print(ChatColor.paint("Please choose 1 - 7, c or q.", ChatColor.ORANGE))
+                print(ChatColor.paint("Please choose 1 - 9, c or q.", ChatColor.ORANGE))
 
     except KeyboardInterrupt:
         print()
@@ -126,6 +130,8 @@ def askMenuChoice(cards: list[Card]) -> str | None:
         ("5", "Progress"),
         ("6", "Export deck to CSV"),
         ("7", "Remove words"),
+        ("8", "Edit a card"),
+        ("9", "Practise one word"),
         ("", ""),
         ("c", "Clear the screen"),
         ("q", "Quit"),
@@ -246,7 +252,14 @@ def offerToAdd(result: dict, translation: str, cards: list[Card], deckPath: str)
         return
 
     cardDeck.addCard(cards, Card.fromLookup(result, translation))
-    cardDeck.saveDeck(cards, deckPath)
+
+    try:
+        cardDeck.saveDeck(cards, deckPath)
+    except cardDeck.DeckSaveError as error:
+        print(ChatColor.paint(f'  {error}', ChatColor.RED))
+        print(ChatColor.paint(f'"{result["word"]}" is in this session, but the deck file was not updated.', ChatColor.ORANGE))
+        return
+
     print(ChatColor.paint(f'Added "{result["word"]}" to your deck ({plural(len(cards), "word")}).', ChatColor.GREEN))
 
 
@@ -257,6 +270,7 @@ def startReview(cards: list[Card], deckPath: str) -> None:
     """
     Review the cards that are due today. If none are due, offer extra practice
     with all cards (extra practice does not change boxes or review dates).
+    After each batch of 20 cards the user can carry on with the rest of the due cards.
     """
 
     if len(cards) == 0:
@@ -284,11 +298,50 @@ def startReview(cards: list[Card], deckPath: str) -> None:
     if mode is None:
         return
 
-    def saveProgress() -> None:
-        cardDeck.saveDeck(cards, deckPath)
+    saveFailed = False
 
-    summary = reviewCards.reviewCards(cardsToReview, mode, saveProgress=saveProgress, today=today, updateSchedule=updateSchedule)
-    printSummary(summary)
+    def saveProgress() -> None:
+
+        """
+        Save after every answer. If the deck cannot be written, say so once and
+        keep the session going, so the answers of this session are not lost.
+        """
+
+        nonlocal saveFailed
+
+        if saveFailed:
+            return
+
+        try:
+            cardDeck.saveDeck(cards, deckPath)
+        except cardDeck.DeckSaveError as error:
+            saveFailed = True
+            print()
+            print(ChatColor.paint(f"  {error}", ChatColor.RED))
+            print(ChatColor.paint("  Your answers are kept for this session, but the deck file was not updated.", ChatColor.ORANGE))
+
+    while True:
+        summary = reviewCards.reviewCards(cardsToReview, mode, saveProgress=saveProgress, today=today, updateSchedule=updateSchedule)
+        printSummary(summary)
+
+        if saveFailed:
+            print(ChatColor.paint("  Your progress was not saved. Fix the deck file problem, then try again.", ChatColor.ORANGE))
+            return
+
+        if not updateSchedule or summary["reviewed"] == 0:
+            return
+
+        remainingDue = cardDeck.getDueCards(cards, today)
+        if len(remainingDue) == 0:
+            return
+
+        nextBatch = min(len(remainingDue), reviewCards.MAX_CARDS_PER_SESSION)
+        print()
+        if not askYesNo(f"Continue with the next {plural(nextBatch, 'card')}? (y/N) ", default=False):
+            return
+
+        cardsToReview = remainingDue
+        print()
 
 
 def askReviewMode() -> str | None:
@@ -363,6 +416,7 @@ def showDeck(cards: list[Card], deckPath: str) -> None:
 
     """
     List every card with its box, next review date, score and translation.
+    Long decks are shown a page at a time, so the numbers stay readable.
     """
 
     if len(cards) == 0:
@@ -374,28 +428,178 @@ def showDeck(cards: list[Card], deckPath: str) -> None:
 
     terminalDisplay.printHeading(f"Your deck: {plural(len(cards), 'word')}, {dueCount} due today")
 
-    longestWord = max(len(eachCard.word) for eachCard in cards)
+    sortedCards = cardDeck.sortByWord(cards)
+    longestWord = max(len(eachCard.word) for eachCard in sortedCards)
     wordWidth = min(max(longestWord, len("Word")), MAX_DECK_WORD_WIDTH)
-    numberWidth = max(len(str(len(cards))), 1)
+    numberWidth = max(len(str(len(sortedCards))), 1)
 
     # The numbers are the same as on the "Remove words" screen.
     header = f"  {'#':>{numberWidth}}  {'Word':<{wordWidth}}  Box  {'Next review':<11}  Score  Chinese"
-    print(ChatColor.paint(header, ChatColor.BOLD))
-    print(ChatColor.paint("  " + "─" * (len(header) - 2), ChatColor.DARK_GRAY))
+    narrow = terminalDisplay.screenWidth() < NARROW_DECK_WIDTH
 
-    for index, eachCard in enumerate(cardDeck.sortByWord(cards), start=1):
-        if leitnerScheduler.isDue(eachCard, today):
-            nextReview = ChatColor.paint(f"{'due now':<11}", ChatColor.ORANGE)
-        else:
-            nextReview = f"{eachCard.nextReview:<11}"
+    pages = []
+    for start in range(0, len(sortedCards), DECK_PAGE_SIZE):
+        pages.append(sortedCards[start:start + DECK_PAGE_SIZE])
 
-        number = ChatColor.paint(f"{index:>{numberWidth}}", ChatColor.DARK_GRAY)
-        score = f"{eachCard.correctCount}/{eachCard.timesReviewed()}"
-        row = f"  {number}  {eachCard.word:<{wordWidth}}  {eachCard.box:>3}  {nextReview}  {score:>5}  {eachCard.translation}"
-        print(row)
+    if len(pages) > 1:
+        print(ChatColor.paint(f"  {DECK_PAGE_SIZE} words per page. Press Enter for the next page, q to go back.", ChatColor.DARK_GRAY))
+        print()
+
+    for pageIndex, pageCards in enumerate(pages, start=1):
+        if not narrow:
+            print(ChatColor.paint(header, ChatColor.BOLD))
+            print(ChatColor.paint("  " + "─" * (len(header) - 2), ChatColor.DARK_GRAY))
+
+        for offset, eachCard in enumerate(pageCards):
+            index = (pageIndex - 1) * DECK_PAGE_SIZE + offset + 1
+            isDue = leitnerScheduler.isDue(eachCard, today)
+            score = f"{eachCard.correctCount}/{eachCard.timesReviewed()}"
+            word = terminalDisplay.truncateText(eachCard.word, wordWidth)
+            number = ChatColor.paint(f"{index:>{numberWidth}}", ChatColor.DARK_GRAY)
+
+            if narrow:
+                # A narrow terminal cannot line up a table, so each card gets its own lines instead.
+                whenDue = "due now" if isDue else f"next {eachCard.nextReview}"
+                line = f"  {number}  {ChatColor.paint(word, ChatColor.BOLD)}"
+                line += ChatColor.paint(f"  ·  box {eachCard.box}  ·  {whenDue}  ·  {score}", ChatColor.DARK_GRAY)
+                print(line)
+
+                if eachCard.translation != "":
+                    print("      " + ChatColor.paint(eachCard.translation, ChatColor.GREEN))
+                continue
+
+            if isDue:
+                nextReview = ChatColor.paint(f"{'due now':<11}", ChatColor.ORANGE)
+            else:
+                nextReview = f"{eachCard.nextReview:<11}"
+
+            row = f"  {number}  {word:<{wordWidth}}  {eachCard.box:>3}  {nextReview}  {score:>5}  {eachCard.translation}"
+            print(row)
+
+        print()
+
+        if pageIndex < len(pages):
+            answer = ask("Enter = next page, q = back: ", ChatColor.DARK_GRAY)
+            if isQuit(answer):
+                return
+
+    print(ChatColor.paint(f"  Saved in: {deckPath}", ChatColor.DARK_GRAY))
+
+
+# ---------- 8. Edit a card ----------
+
+def editCard(cards: list[Card], deckPath: str) -> None:
+
+    """
+    Change a card that is already in the deck: its word, its Chinese translation or its meaning.
+    Pressing Enter on a question keeps the current value; "-" clears that part.
+    """
+
+    if len(cards) == 0:
+        print(ChatColor.paint("Your deck is empty. Look up some words and add them first.", ChatColor.ORANGE))
+        return
+
+    word = ask("Word to edit (Enter = back): ", ChatColor.BOLD, ChatColor.YELLOW)
+    if isQuit(word) or word == "":
+        return
+
+    card = cardDeck.findCard(cards, word)
+    if card is None:
+        print(ChatColor.paint(f'"{word}" is not in your deck.', ChatColor.ORANGE))
+        return
 
     print()
-    print(ChatColor.paint(f"  Saved in: {deckPath}", ChatColor.DARK_GRAY))
+    print(reviewCards.formatCardBack(card))
+    print()
+
+    newWord = ask("New word (Enter = keep): ", ChatColor.YELLOW)
+    if isQuit(newWord):
+        return
+
+    if newWord != "" and newWord.casefold() != card.word.casefold():
+        if cardDeck.findCard(cards, newWord) is not None:
+            print(ChatColor.paint(f'"{newWord}" is already in your deck, so nothing was changed.', ChatColor.ORANGE))
+            return
+
+        card.word = newWord
+
+    translation = ask("New Chinese (Enter = keep, - = clear): ", ChatColor.YELLOW)
+    if isQuit(translation):
+        return
+
+    if translation == "-":
+        card.translation = ""
+    elif translation != "":
+        card.translation = translation
+
+    definition = ask("New meaning, one line (Enter = keep, - = clear): ", ChatColor.YELLOW)
+    if isQuit(definition):
+        return
+
+    if definition == "-":
+        card.definitions = []
+        card.examples = []
+    elif definition != "":
+        card.definitions = [definition]
+        card.examples = [[]]
+
+    try:
+        cardDeck.saveDeck(cards, deckPath)
+    except cardDeck.DeckSaveError as error:
+        print(ChatColor.paint(f'  {error}', ChatColor.RED))
+        print(ChatColor.paint("The change is in this session, but the deck file was not updated.", ChatColor.ORANGE))
+        return
+
+    print(ChatColor.paint(f'Updated "{card.word}".', ChatColor.GREEN))
+
+
+# ---------- 9. Practise one word ----------
+
+def practiseOneWord(cards: list[Card], deckPath: str) -> None:
+
+    """
+    Review a single card, whatever its next review date, in the mode the user picks.
+    """
+
+    if len(cards) == 0:
+        print(ChatColor.paint("Your deck is empty. Look up some words and add them first.", ChatColor.ORANGE))
+        return
+
+    word = ask("Practise which word (Enter = back): ", ChatColor.BOLD, ChatColor.YELLOW)
+    if isQuit(word) or word == "":
+        return
+
+    card = cardDeck.findCard(cards, word)
+    if card is None:
+        print(ChatColor.paint(f'"{word}" is not in your deck.', ChatColor.ORANGE))
+        return
+
+    print()
+    mode = askReviewMode()
+    if mode is None:
+        return
+
+    saveFailed = False
+
+    def saveProgress() -> None:
+        nonlocal saveFailed
+
+        if saveFailed:
+            return
+
+        try:
+            cardDeck.saveDeck(cards, deckPath)
+        except cardDeck.DeckSaveError as error:
+            saveFailed = True
+            print()
+            print(ChatColor.paint(f"  {error}", ChatColor.RED))
+            print(ChatColor.paint("  Your answer is kept for this session, but the deck file was not updated.", ChatColor.ORANGE))
+
+    summary = reviewCards.reviewCards([card], mode, saveProgress=saveProgress, today=date.today(), updateSchedule=True)
+    printSummary(summary)
+
+    if saveFailed:
+        print(ChatColor.paint("  Your progress was not saved. Fix the deck file problem, then try again.", ChatColor.ORANGE))
 
 
 # ---------- 6. Export deck to CSV ----------

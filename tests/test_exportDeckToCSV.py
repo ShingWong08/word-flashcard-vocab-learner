@@ -1,4 +1,5 @@
 import csv
+import io
 
 from word_flashcard_vocab_learner import exportDeckToCSV, importVocabulary
 from word_flashcard_vocab_learner.flashCard import Card
@@ -31,3 +32,27 @@ def test_exported_csv_can_be_imported_again(tmp_path):
     text = importVocabulary.readTextFromFile(str(path))
 
     assert importVocabulary.extractWords(text) == ["ambiguous", "ice cream"]
+
+
+def test_csv_keeps_text_that_looks_like_a_formula_away_from_the_spreadsheet(tmp_path):
+    card = Card("cat", ["a pet"], [["=1+1"]], "=cmd()", nextReview="2026-12-01")
+    path = tmp_path / "deck.csv"
+
+    exportDeckToCSV.exportDeckToCSV([card], str(path))
+
+    rows = list(csv.reader(io.StringIO(path.read_text(encoding="utf-8-sig"))))
+    row = rows[1]
+    assert row[0] == "cat"        # the word itself is unchanged, so importing again still works
+    assert row[1] == "'=cmd()"    # the Chinese translation cannot run as a formula
+    assert row[3] == "'=1+1"      # the example cannot run as a formula
+
+
+def test_normal_text_is_not_changed(tmp_path):
+    card = Card("cat", ["a pet"], [["My cat is asleep."]], "貓", nextReview="2026-12-01")
+    path = tmp_path / "deck.csv"
+
+    exportDeckToCSV.exportDeckToCSV([card], str(path))
+
+    rows = list(csv.reader(io.StringIO(path.read_text(encoding="utf-8-sig"))))
+    assert rows[1][1] == "貓"
+    assert rows[1][3] == "My cat is asleep."

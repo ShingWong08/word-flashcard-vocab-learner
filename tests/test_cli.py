@@ -151,11 +151,11 @@ def test_damaged_deck_is_not_overwritten(capsys, tmp_path, typeAnswers):
 
 
 def test_unknown_menu_choice(capsys, tmp_path, typeAnswers):
-    typeAnswers(["9", "q"])
+    typeAnswers(["x", "q"])
 
     app.main(deckPath(tmp_path))
 
-    assert "Please choose 1 - 7, c or q." in capsys.readouterr().out
+    assert "Please choose 1 - 9, c or q." in capsys.readouterr().out
 
 
 def test_main_uses_default_deck_path(capsys, tmp_path, typeAnswers):
@@ -238,3 +238,103 @@ def test_export_asks_before_replacing(capsys, tmp_path, typeAnswers):
     app.main(deckPath(tmp_path))
 
     assert existing.read_text(encoding="utf-8") == "keep me"
+
+
+def test_edit_card_changes_word_translation_and_meaning(capsys, tmp_path, typeAnswers):
+    saveCat(tmp_path)
+    typeAnswers(["8", "cat", "", "貓咪", "a small pet", "q"])
+
+    app.main(deckPath(tmp_path))
+
+    out = capsys.readouterr().out
+    assert 'Updated "cat".' in out
+
+    savedCard = cardDeck.loadDeck(deckPath(tmp_path))[0]
+    assert savedCard.translation == "貓咪"
+    assert savedCard.definitions == ["a small pet"]
+
+
+def test_edit_card_keeps_values_when_enter_is_pressed(capsys, tmp_path, typeAnswers):
+    saveCat(tmp_path)
+    typeAnswers(["8", "cat", "", "", "", "q"])
+
+    app.main(deckPath(tmp_path))
+
+    savedCard = cardDeck.loadDeck(deckPath(tmp_path))[0]
+    assert savedCard.translation == "貓"
+    assert savedCard.definitions == ["a pet"]
+
+
+def test_edit_card_refuses_a_word_that_is_already_in_the_deck(capsys, tmp_path, typeAnswers):
+    cardDeck.saveDeck([Card("cat", ["a pet"], [[]]), Card("dog", ["a pet"], [[]])], deckPath(tmp_path))
+    typeAnswers(["8", "cat", "dog", "q"])
+
+    app.main(deckPath(tmp_path))
+
+    out = capsys.readouterr().out
+    assert '"dog" is already in your deck' in out
+    assert [eachCard.word for eachCard in cardDeck.loadDeck(deckPath(tmp_path))] == ["cat", "dog"]
+
+
+def test_practise_one_word(capsys, tmp_path, typeAnswers):
+    saveCat(tmp_path, nextReview="2999-01-01")
+    typeAnswers(["9", "cat", "1", "", "y", "q"])
+
+    app.main(deckPath(tmp_path))
+
+    out = capsys.readouterr().out
+    assert "Card 1 of 1" in out
+    assert "Session finished" in out
+
+    savedCard = cardDeck.loadDeck(deckPath(tmp_path))[0]
+    assert savedCard.correctCount == 1
+
+
+def test_view_a_long_deck_one_page_at_a_time(capsys, tmp_path, typeAnswers):
+    words = ["word" + str(index) for index in range(1, 36)]
+    cardDeck.saveDeck([Card(eachWord, ["a meaning"], [[]]) for eachWord in words], deckPath(tmp_path))
+    prompts = typeAnswers(["4", "", "", "q"])
+
+    app.main(deckPath(tmp_path))
+
+    out = capsys.readouterr().out
+    assert "30 words per page" in out
+    assert prompts.count("Enter = next page, q = back: ") == 1    # 35 words = 2 pages, one prompt between them
+    assert out.count("Box  Next review") == 2                     # a header on every page
+    assert "  Saved in:" in out
+
+
+def test_review_offers_to_carry_on_after_twenty_cards(capsys, tmp_path, typeAnswers):
+    words = ["word" + str(index) for index in range(1, 22)]
+    cardDeck.saveDeck([Card(eachWord, ["a meaning"], [[]]) for eachWord in words], deckPath(tmp_path))
+
+    answers = ["2", "1"]
+    for _ in range(20):
+        answers.extend(["", "y"])
+    answers.extend(["y", "", "y", "q"])
+    prompts = typeAnswers(answers)
+
+    app.main(deckPath(tmp_path))
+
+    out = capsys.readouterr().out
+    assert "Continue with the next 1 card? (y/N) " in prompts
+    assert out.count("Session finished") == 2
+    assert sum(eachCard.correctCount for eachCard in cardDeck.loadDeck(deckPath(tmp_path))) == 21
+
+
+def test_review_keeps_going_when_the_deck_cannot_be_saved(capsys, tmp_path, typeAnswers):
+    saveCat(tmp_path)
+    folder = tmp_path
+    folder.chmod(0o555)
+
+    try:
+        typeAnswers(["2", "2", "cat", "q"])
+        app.main(deckPath(tmp_path))
+    finally:
+        folder.chmod(0o755)
+
+    out = capsys.readouterr().out
+    assert "cannot be written" in out
+    assert "Your answers are kept for this session" in out
+    assert "Correct!" in out
+    assert "Goodbye!" in out

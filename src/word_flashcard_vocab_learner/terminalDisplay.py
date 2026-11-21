@@ -128,6 +128,21 @@ def labelLine(label: str, value: object, labelWidth: int, indent: str = "  ") ->
     return indent + ChatColor.paint(paddedLabel, ChatColor.DARK_GRAY) + "  " + str(value)
 
 
+MAX_WORD_COLUMN_WIDTH = 24
+
+
+def truncateText(text: str, width: int) -> str:
+
+    """
+    Shorten text so it fits a column. Long words get "…", so the columns next to them stay lined up.
+    """
+
+    if width < 2 or len(text) <= width:
+        return text
+
+    return text[: width - 1] + "…"
+
+
 def formatColumns(items: list[str], indent: str = "  ", width: int | None = None) -> str:
 
     """

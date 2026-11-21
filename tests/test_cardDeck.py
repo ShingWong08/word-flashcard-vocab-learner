@@ -200,3 +200,66 @@ def test_unreadable_file_is_copied_before_being_replaced(tmp_path):
 
     assert os.path.exists(path + ".damaged")
     assert [eachCard.word for eachCard in cardDeck.loadDeck(path)] == ["cat", "dog"]
+
+
+def test_default_deck_path_expands_home_folder(monkeypatch):
+    monkeypatch.setenv("WORD_FLASHCARD_DECK", "~/custom/deck.json")
+
+    path = cardDeck.defaultDeckPath()
+
+    assert "~" not in path
+    assert path.endswith(os.path.join("custom", "deck.json"))
+
+
+def test_default_deck_path_without_variable(monkeypatch):
+    monkeypatch.delenv("WORD_FLASHCARD_DECK", raising=False)
+    path = cardDeck.defaultDeckPath()
+
+    assert path.endswith(os.path.join(".word_flashcard", "deck.json"))
+
+
+def test_save_raises_a_readable_error_when_the_folder_cannot_be_written(tmp_path):
+    folder = tmp_path / "read-only"
+    folder.mkdir()
+    path = str(folder / "deck.json")
+
+    cards = cardDeck.loadDeck(path)
+    cards.append(makeCard("cat"))
+
+    folder.chmod(0o555)
+    try:
+        with pytest.raises(cardDeck.DeckSaveError) as error:
+            cardDeck.saveDeck(cards, path)
+    finally:
+        folder.chmod(0o755)
+
+    assert "cannot be written" in str(error.value)
+    assert "permission denied" in str(error.value).lower()
+    assert not os.path.exists(path + ".tmp")
+
+
+def test_save_does_not_read_the_file_again_when_nothing_changed(tmp_path, monkeypatch):
+    path = str(tmp_path / "deck.json")
+    cardDeck.saveDeck([makeCard("cat")], path)
+
+    reads = []
+    originalRead = cardDeck._readDeckData
+    monkeypatch.setattr(cardDeck, "_readDeckData", lambda eachPath: reads.append(eachPath) or originalRead(eachPath))
+
+    cards = cardDeck.loadDeck(path)
+    cardDeck.saveDeck(cards, path)
+
+    assert len(reads) == 1   # only the load, not the save
+
+
+def test_save_still_merges_when_another_window_wrote_in_the_meantime(tmp_path):
+    path = str(tmp_path / "deck.json")
+    cardDeck.saveDeck([makeCard("cat")], path)
+
+    cards = cardDeck.loadDeck(path)
+    anotherWindowSaves(path, [makeCard("cat"), makeCard("dog")])
+    cards.append(makeCard("bird"))
+    cardDeck.saveDeck(cards, path)
+
+    # This window's cards come first, then the words that only the other window has.
+    assert [eachCard.word for eachCard in cardDeck.loadDeck(path)] == ["cat", "bird", "dog"]
