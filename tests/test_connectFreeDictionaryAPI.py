@@ -46,11 +46,11 @@ def capturedURL(monkeypatch):
         captured["timeout"] = timeout
         return captured.get("response", FakeResponse(SAMPLE))
 
-    monkeypatch.setattr(dictionary.requests, "get", fakeGet)
+    monkeypatch.setattr(dictionary.session, "get", fakeGet)
     return captured
 
 
-def test_collects_definitions_and_matching_examples(capturedURL):
+def testCollectsDefinitionsAndMatchingExamples(capturedURL):
     result = dictionary.getWordDefinition("example")
 
     assert result == {
@@ -61,96 +61,114 @@ def test_collects_definitions_and_matching_examples(capturedURL):
     assert capturedURL["timeout"] == 15
 
 
-def test_respects_max_examples_per_definition(capturedURL):
-    result = dictionary.getWordDefinition("example", maxExamplesPerDefinition=3)
+def testRespectsMaxExamplesPerDefinition(capturedURL):
+    result = dictionary.getWordDefinition("example", maxExamples=3)
     assert result["examples"][0] == ["ex 1 first", "ex 1 second", "ex 1 third"]
 
 
-def test_does_not_request_translations(capturedURL):
+def testDoesNotRequestTranslations(capturedURL):
     dictionary.getWordDefinition("example")
-    assert capturedURL["url"] == "https://freedictionaryapi.com/api/v1/entries/en/example"
+    assert (
+        capturedURL["url"] == "https://freedictionaryapi.com/api/v1/entries/en/example"
+    )
 
 
-def test_respects_max_definitions(capturedURL):
+def testRespectsMaxDefinitions(capturedURL):
     result = dictionary.getWordDefinition("example", maxDefinitions=1)
     assert result["definitions"] == ["def 1"]
     assert result["examples"] == [["ex 1 first", "ex 1 second"]]
 
 
-def test_word_is_url_encoded(capturedURL):
+def testWordIsUrlEncoded(capturedURL):
     dictionary.getWordDefinition("  ice cream/x ")
     assert capturedURL["url"].endswith("/en/ice%20cream%2Fx")
 
 
-def test_not_found_returns_empty_result(capturedURL):
+def testNotFoundReturnsEmptyResult(capturedURL):
     capturedURL["response"] = FakeResponse(status_code=404)
     result = dictionary.getWordDefinition("qwzx")
     assert result == {"word": "qwzx", "definitions": [], "examples": []}
     assert dictionary.formatWordDefinition(result) == 'No definition found for "qwzx".'
 
 
-def test_server_error_raises(capturedURL):
+def testServerErrorRaises(capturedURL):
     capturedURL["response"] = FakeResponse(status_code=500)
     with pytest.raises(requests.HTTPError):
         dictionary.getWordDefinition("example")
 
 
-def test_empty_word_raises():
+def testEmptyWordRaises():
     with pytest.raises(ValueError):
         dictionary.getWordDefinition("   ")
 
 
-def test_case_variants():
+def testCaseVariants():
     assert dictionary.caseVariants("jason") == ["jason", "Jason"]
     assert dictionary.caseVariants("BOOK") == ["BOOK", "book", "Book"]
     assert dictionary.caseVariants("cat") == ["cat", "Cat"]
 
 
-def test_falls_back_to_capitalized_spelling(monkeypatch):
+def testFallsBackToCapitalizedSpelling(monkeypatch):
     requested = []
 
     def fakeGet(url, timeout):
         requested.append(url)
         if url.endswith("/en/Jason"):
-            return FakeResponse({"entries": [{"senses": [{"definition": "A male given name."}]}]})
-        return FakeResponse({"word": "x", "entries": []})  # API answers 200 with no entries
+            return FakeResponse(
+                {"entries": [{"senses": [{"definition": "A male given name."}]}]}
+            )
+        return FakeResponse(
+            {"word": "x", "entries": []}
+        )  # API answers 200 with no entries
 
-    monkeypatch.setattr(dictionary.requests, "get", fakeGet)
+    monkeypatch.setattr(dictionary.session, "get", fakeGet)
     result = dictionary.getWordDefinition("jason")
 
-    assert result == {"word": "Jason", "definitions": ["A male given name."], "examples": [[]]}
+    assert result == {
+        "word": "Jason",
+        "definitions": ["A male given name."],
+        "examples": [[]],
+    }
     assert [url.rsplit("/", 1)[1] for url in requested] == ["jason", "Jason"]
 
 
-def test_typed_spelling_wins_when_it_exists(capturedURL):
+def testTypedSpellingWinsWhenItExists(capturedURL):
     result = dictionary.getWordDefinition("Example")
     assert result["word"] == "Example"
     assert capturedURL["url"].endswith("/en/Example")
 
 
-def test_format_word_definition_with_examples():
-    text = dictionary.formatWordDefinition({
-        "word": "cat",
-        "definitions": ["a small animal", "a person"],
-        "examples": [["The cat sat on the mat.", "I have two cats."], []],
-    })
+def testFormatWordDefinitionWithExamples():
+    text = dictionary.formatWordDefinition(
+        {
+            "word": "cat",
+            "definitions": ["a small animal", "a person"],
+            "examples": [["The cat sat on the mat.", "I have two cats."], []],
+        }
+    )
 
-    assert text == "\n".join([
-        'Definitions of "cat":',
-        "",
-        "  1. a small animal",
-        "     > The cat sat on the mat.",
-        "     > I have two cats.",
-        "",
-        "  2. a person",
-    ])
+    assert text == "\n".join(
+        [
+            'Definitions of "cat":',
+            "",
+            "  1. a small animal",
+            "     > The cat sat on the mat.",
+            "     > I have two cats.",
+            "",
+            "  2. a person",
+        ]
+    )
 
 
-def test_format_word_definition_wraps_long_lines(monkeypatch):
+def testFormatWordDefinitionWrapsLongLines(monkeypatch):
     monkeypatch.setenv("COLUMNS", "40")
-    longDefinition = "The elongated curved tropical fruit of a banana plant, which grows in bunches."
+    longDefinition = (
+        "The elongated curved tropical fruit of a banana plant, which grows in bunches."
+    )
 
-    text = dictionary.formatWordDefinition({"word": "banana", "definitions": [longDefinition], "examples": [[]]})
+    text = dictionary.formatWordDefinition(
+        {"word": "banana", "definitions": [longDefinition], "examples": [[]]}
+    )
     lines = text.splitlines()
 
     assert lines[2] == "  1. The elongated curved tropical fruit"

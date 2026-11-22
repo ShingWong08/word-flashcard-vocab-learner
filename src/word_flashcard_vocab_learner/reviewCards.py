@@ -3,12 +3,16 @@ import re
 from collections.abc import Callable
 from datetime import date
 
-from word_flashcard_vocab_learner import genAITutor, leitnerScheduler, speechHelper, terminalDisplay
+from word_flashcard_vocab_learner import (
+    genAITutor,
+    leitnerScheduler,
+    speechHelper,
+    terminalDisplay,
+)
 from word_flashcard_vocab_learner.chatColor import ChatColor
 from word_flashcard_vocab_learner.connectFreeDictionaryAPI import formatWordDefinition
 from word_flashcard_vocab_learner.flashCard import Card
 from word_flashcard_vocab_learner.userInput import ask, askYesNo, isQuit
-
 
 MAX_CARDS_PER_SESSION = 20
 MASK = "____"
@@ -36,13 +40,23 @@ MODE_DESCRIPTIONS = {
     MODE_SENTENCE: "Write a sentence, get AI feedback",
 }
 
+# Curly quotes and dashes people paste from Word or a phone keyboard.
+QUOTE_TRANSLATION = str.maketrans(
+    {"’": "'", "‘": "'", "“": '"', "”": '"', "—": " ", "–": " "}
+)
+
+# Audio tags in a transcription, like "(laughs)" or "[noise]".
+AUDIO_TAG = re.compile(r"\([^)]*\)|\[[^\]]*\]")
+NOT_WORD_CHARACTER = re.compile(r"[^\w' ]")
+
 
 # ---------- Answer checking ----------
 
-def maskWord(text: str, word: str) -> str:
 
+def maskWord(text: str, word: str) -> str:
     """
-    Hide the word (and forms like "cats" for "cat") in a sentence, so clues do not give the answer away.
+    Hide the word (and forms like "cats" for "cat") in a sentence, so clues do not give
+    the answer away.
     Example: maskWord("I have two cats.", "cat") -> "I have two ____."
     """
 
@@ -53,43 +67,27 @@ def maskWord(text: str, word: str) -> str:
 
 
 def makeHint(word: str) -> str:
-
     """
     Show the first letter and the length of the word.
     Example: "ambiguous" -> "a________ (9 letters)"
     """
 
-    hintCharacters = []
-    letterCount = 0
+    letterCount = sum(eachCharacter.isalpha() for eachCharacter in word)
+    hint = word[:1] + "".join(
+        "_" if eachCharacter.isalpha() else eachCharacter for eachCharacter in word[1:]
+    )
 
-    for index, eachCharacter in enumerate(word):
-        if eachCharacter.isalpha():
-            letterCount += 1
-
-        if index == 0 or not eachCharacter.isalpha():
-            hintCharacters.append(eachCharacter)
-        else:
-            hintCharacters.append("_")
-
-    return "".join(hintCharacters) + f" ({letterCount} letters)"
-
-
-# Curly quotes and dashes people paste from Word or a phone keyboard.
-QUOTE_TRANSLATION = str.maketrans({"’": "'", "‘": "'", "“": '"', "”": '"', "—": " ", "–": " "})
+    return f"{hint} ({letterCount} letters)"
 
 
 def normalizeAnswer(text: str) -> str:
-
     """
-    Make a typed answer easy to compare: lowercase, single spaces, no full stop at the end.
+    Make a typed answer easy to compare: lowercase, single spaces, no full stop at the
+    end.
     """
 
-    text = text.translate(QUOTE_TRANSLATION)
-    text = text.replace("-", " ")
-    text = " ".join(text.split())
-    text = text.strip(".!?,;:\"'")
-
-    return text.casefold()
+    text = text.translate(QUOTE_TRANSLATION).replace("-", " ")
+    return " ".join(text.split()).strip(".!?,;:\"'").casefold()
 
 
 def isSpellingCorrect(answer: str, word: str) -> bool:
@@ -97,35 +95,33 @@ def isSpellingCorrect(answer: str, word: str) -> bool:
 
 
 def normalizeSpokenText(text: str) -> str:
-
     """
-    Make a transcription easy to compare: remove audio tags like "(laughs)" or "[noise]",
+    Make a transcription easy to compare: remove audio tags like "(laughs)" or
+    "[noise]",
     punctuation and hyphens, then lowercase.
     """
 
-    text = re.sub(r"\([^)]*\)|\[[^\]]*\]", " ", text)
-    text = text.replace("-", " ")
-    text = re.sub(r"[^\w' ]", " ", text)
+    text = AUDIO_TAG.sub(" ", text).replace("-", " ")
+    text = NOT_WORD_CHARACTER.sub(" ", text)
 
     return " ".join(text.split()).casefold()
 
 
 def isSpokenCorrect(transcription: str, word: str) -> bool:
-
     """
-    Return True if the word was said, even inside a short phrase ("It's ambiguous." counts for "ambiguous").
+    Return True if the word was said, even inside a short phrase ("It's ambiguous."
+    counts for "ambiguous").
     """
 
-    spokenText = " " + normalizeSpokenText(transcription) + " "
-    target = " " + normalizeSpokenText(word) + " "
+    target = normalizeSpokenText(word)
 
-    return target.strip() != "" and target in spokenText
+    return target != "" and f" {target} " in f" {normalizeSpokenText(transcription)} "
 
 
 # ---------- Showing cards ----------
 
-def formatTranslation(card: Card) -> str:
 
+def formatTranslation(card: Card) -> str:
     """
     The "Chinese: ..." line, or "" if the card has no translation.
     """
@@ -133,7 +129,11 @@ def formatTranslation(card: Card) -> str:
     if card.translation == "":
         return ""
 
-    return INDENT + ChatColor.paint("Chinese: ", ChatColor.DARK_GRAY) + ChatColor.paint(card.translation, ChatColor.GREEN)
+    return (
+        INDENT
+        + ChatColor.paint("Chinese: ", ChatColor.DARK_GRAY)
+        + ChatColor.paint(card.translation, ChatColor.GREEN)
+    )
 
 
 def formatFront(card: Card) -> str:
@@ -141,19 +141,24 @@ def formatFront(card: Card) -> str:
 
 
 def formatCardBack(card: Card) -> str:
-
     """
-    The back of the card: numbered definitions with examples, then the Chinese translation.
+    The back of the card: numbered definitions with examples, then the Chinese
+    translation.
     """
 
-    if len(card.definitions) == 0:
-        text = INDENT + ChatColor.paint("No meaning saved for this card. Press 8 on the main menu to add one.", ChatColor.ORANGE)
+    if card.definitions:
+        text = formatWordDefinition(
+            {
+                "word": card.word,
+                "definitions": card.definitions,
+                "examples": card.examples,
+            }
+        )
     else:
-        text = formatWordDefinition({
-            "word": card.word,
-            "definitions": card.definitions,
-            "examples": card.examples,
-        })
+        text = INDENT + ChatColor.paint(
+            "No meaning saved for this card. Press 8 on the main menu to add one.",
+            ChatColor.ORANGE,
+        )
 
     translationLine = formatTranslation(card)
     if translationLine != "":
@@ -163,9 +168,9 @@ def formatCardBack(card: Card) -> str:
 
 
 def formatClues(card: Card) -> str:
-
     """
-    Clues for guessing the word: numbered definitions and one example each (with the word hidden),
+    Clues for guessing the word: numbered definitions and one example each (with the
+    word hidden),
     then the Chinese translation and a hint.
     """
 
@@ -173,19 +178,25 @@ def formatClues(card: Card) -> str:
 
     for index, eachDefinition in enumerate(card.definitions):
         number = f"{INDENT}{index + 1}. "
-        exampleIndent = " " * len(number)
 
         lines.append("")
-        lines.append(terminalDisplay.wrapParagraph(maskWord(eachDefinition, card.word), number, prefixStyles=(ChatColor.DARK_GRAY,)))
-
-        if index < len(card.examples) and len(card.examples[index]) > 0:
-            maskedExample = maskWord(card.examples[index][0], card.word)
-            lines.append(terminalDisplay.wrapParagraph(
-                maskedExample,
-                exampleIndent + "> ",
+        lines.append(
+            terminalDisplay.wrapParagraph(
+                maskWord(eachDefinition, card.word),
+                number,
                 prefixStyles=(ChatColor.DARK_GRAY,),
-                textStyles=(ChatColor.AQUA,),
-            ))
+            )
+        )
+
+        if index < len(card.examples) and card.examples[index]:
+            lines.append(
+                terminalDisplay.wrapParagraph(
+                    maskWord(card.examples[index][0], card.word),
+                    " " * len(number) + "> ",
+                    prefixStyles=(ChatColor.DARK_GRAY,),
+                    textStyles=(ChatColor.AQUA,),
+                )
+            )
 
     lines.append("")
 
@@ -193,13 +204,14 @@ def formatClues(card: Card) -> str:
     if translationLine != "":
         lines.append(translationLine)
 
-    lines.append(INDENT + ChatColor.paint("Hint:    ", ChatColor.DARK_GRAY) + makeHint(card.word))
+    lines.append(
+        INDENT + ChatColor.paint("Hint:    ", ChatColor.DARK_GRAY) + makeHint(card.word)
+    )
 
     return "\n".join(lines)
 
 
 def playSafely(word: str) -> bool:
-
     """
     Play the word's pronunciation. Prints the problem and returns False if it fails.
     """
@@ -207,7 +219,9 @@ def playSafely(word: str) -> bool:
     try:
         speechHelper.pronounce(word)
     except Exception as error:
-        print(ChatColor.paint(f"Could not play the pronunciation: {error}", ChatColor.RED))
+        print(
+            ChatColor.paint(f"Could not play the pronunciation: {error}", ChatColor.RED)
+        )
         return False
 
     return True
@@ -216,8 +230,8 @@ def playSafely(word: str) -> bool:
 # ---------- One question per mode ----------
 # Each function returns True (right), False (wrong) or None (the user wants to stop).
 
-def askMeaning(card: Card) -> bool | None:
 
+def askMeaning(card: Card) -> bool | None:
     """
     Show the word, let the user think, flip the card, then let the user mark themselves.
     """
@@ -251,7 +265,6 @@ def askMeaning(card: Card) -> bool | None:
 
 
 def askSpelling(card: Card) -> bool | None:
-
     """
     Show the clues and let the user type the word.
     """
@@ -268,12 +281,13 @@ def askSpelling(card: Card) -> bool | None:
 
 
 def askListening(card: Card) -> bool | None:
-
     """
     Play the word and let the user type what they heard.
     """
 
-    print(INDENT + ChatColor.paint("Listen and type the word you hear.", ChatColor.CYAN))
+    print(
+        INDENT + ChatColor.paint("Listen and type the word you hear.", ChatColor.CYAN)
+    )
     print()
 
     if not playSafely(card.word):
@@ -285,15 +299,13 @@ def askListening(card: Card) -> bool | None:
         if isQuit(answer):
             return None
 
-        if answer.lower() == "r":
-            playSafely(card.word)
-            continue
+        if answer.lower() != "r":
+            return isSpellingCorrect(answer, card.word)
 
-        return isSpellingCorrect(answer, card.word)
+        playSafely(card.word)
 
 
 def askSpeaking(card: Card) -> bool | None:
-
     """
     Show the clues and let the user say the word out loud.
     """
@@ -305,27 +317,40 @@ def askSpeaking(card: Card) -> bool | None:
     try:
         transcription = speechHelper.listenForWord()
     except Exception as error:
-        print(ChatColor.paint(f"Could not record or transcribe your voice: {error}", ChatColor.RED))
+        print(
+            ChatColor.paint(
+                f"Could not record or transcribe your voice: {error}", ChatColor.RED
+            )
+        )
         return None
 
-    print(ChatColor.paint("You said: ", ChatColor.BOLD) + ChatColor.paint(transcription, ChatColor.VIOLET))
+    print(
+        ChatColor.paint("You said: ", ChatColor.BOLD)
+        + ChatColor.paint(transcription, ChatColor.VIOLET)
+    )
 
     return isSpokenCorrect(transcription, card.word)
 
 
 def askSentence(card: Card) -> bool | None:
-
     """
-    Let the user write a sentence with the word, and ask the AI tutor whether it is used correctly.
+    Let the user write a sentence with the word, and ask the AI tutor whether it is used
+    correctly.
     """
 
     print(formatFront(card))
     print()
 
     firstDefinition = ""
-    if len(card.definitions) > 0:
+    if card.definitions:
         firstDefinition = card.definitions[0]
-        print(terminalDisplay.wrapParagraph(firstDefinition, INDENT + "Meaning: ", prefixStyles=(ChatColor.DARK_GRAY,)))
+        print(
+            terminalDisplay.wrapParagraph(
+                firstDefinition,
+                INDENT + "Meaning: ",
+                prefixStyles=(ChatColor.DARK_GRAY,),
+            )
+        )
 
     translationLine = formatTranslation(card)
     if translationLine != "":
@@ -334,7 +359,9 @@ def askSentence(card: Card) -> bool | None:
     print()
 
     while True:
-        sentence = ask(f'Write a sentence using "{card.word}" (q = stop): ', ChatColor.YELLOW)
+        sentence = ask(
+            f'Write a sentence using "{card.word}" (q = stop): ', ChatColor.YELLOW
+        )
 
         if isQuit(sentence):
             return None
@@ -345,7 +372,9 @@ def askSentence(card: Card) -> bool | None:
     print(ChatColor.paint("Checking your sentence...", ChatColor.BLUE))
 
     try:
-        isCorrect, feedback = genAITutor.checkSentence(card.word, firstDefinition, sentence)
+        isCorrect, feedback = genAITutor.checkSentence(
+            card.word, firstDefinition, sentence
+        )
     except Exception as error:
         print(ChatColor.paint(f"Could not reach the AI tutor: {error}", ChatColor.RED))
         return None
@@ -359,7 +388,11 @@ def askSentence(card: Card) -> bool | None:
             if eachLine.strip() == "":
                 continue
 
-            print(terminalDisplay.wrapParagraph(eachLine.strip(), prefix, prefixStyles=(ChatColor.BOLD,)))
+            print(
+                terminalDisplay.wrapParagraph(
+                    eachLine.strip(), prefix, prefixStyles=(ChatColor.BOLD,)
+                )
+            )
             prefix = " " * len("Feedback: ")
 
         print()
@@ -380,7 +413,6 @@ ASK_FUNCTIONS = {
 
 
 def availableModes() -> list[str]:
-
     """
     Return the review modes that can be used right now.
     Listening and speaking need speech set up; sentence practice needs the AI tutor.
@@ -389,8 +421,7 @@ def availableModes() -> list[str]:
     modes = [MODE_MEANING, MODE_SPELLING]
 
     if speechHelper.isSpeechAvailable():
-        modes.append(MODE_LISTENING)
-        modes.append(MODE_SPEAKING)
+        modes += [MODE_LISTENING, MODE_SPEAKING]
 
     if genAITutor.isAIAvailable():
         modes.append(MODE_SENTENCE)
@@ -399,7 +430,6 @@ def availableModes() -> list[str]:
 
 
 def showOutcome(card: Card, isCorrect: bool, mode: str) -> None:
-
     """
     Tell the user whether they were right. When they were wrong, show the answer.
     """
@@ -411,10 +441,18 @@ def showOutcome(card: Card, isCorrect: bool, mode: str) -> None:
         return
 
     if mode == MODE_MEANING:
-        print(ChatColor.paint("No problem, this card will come back soon.", ChatColor.ORANGE))
+        print(
+            ChatColor.paint(
+                "No problem, this card will come back soon.", ChatColor.ORANGE
+            )
+        )
         return
 
-    print(ChatColor.paint(f'Not quite. The answer is "{card.word}".', ChatColor.BOLD, ChatColor.RED))
+    print(
+        ChatColor.paint(
+            f'Not quite. The answer is "{card.word}".', ChatColor.BOLD, ChatColor.RED
+        )
+    )
 
     if mode != MODE_SENTENCE:
         print()
@@ -422,6 +460,7 @@ def showOutcome(card: Card, isCorrect: bool, mode: str) -> None:
 
 
 # ---------- A whole review session ----------
+
 
 def reviewCards(
     cards: list[Card],
@@ -432,19 +471,22 @@ def reviewCards(
     shuffle: bool = True,
     maxCards: int = MAX_CARDS_PER_SESSION,
 ) -> dict:
-
     """
     Review a list of cards in one mode.
-    Cards answered wrongly are asked once more at the end of the session (only the first answer counts).
+    Cards answered wrongly are asked once more at the end of the session (only the first
+    answer counts).
 
     Parameters:
         Mandatory:
             - cards (list[Card]): The cards to review.
-            - mode (str): One of MODE_MEANING, MODE_SPELLING, MODE_LISTENING, MODE_SPEAKING, MODE_SENTENCE.
+            - mode (str): One of MODE_MEANING, MODE_SPELLING, MODE_LISTENING,
+              MODE_SPEAKING, MODE_SENTENCE.
         Optional:
-            - saveProgress (callable): Called after every scheduled answer, so progress is kept if the user stops.
+            - saveProgress (callable): Called after every scheduled answer, so progress
+              is kept if the user stops.
             - today (date): The date to schedule from. Default is today.
-            - updateSchedule (bool): False for extra practice that does not change boxes or review dates.
+            - updateSchedule (bool): False for extra practice that does not change boxes
+              or review dates.
             - shuffle (bool): Review the cards in random order.
             - maxCards (int): Maximum number of cards in one session.
     Returns:
@@ -462,18 +504,14 @@ def reviewCards(
         random.shuffle(selectedCards)
     selectedCards = selectedCards[:maxCards]
 
-    queue = []
-    for eachCard in selectedCards:
-        queue.append((eachCard, False))
-
+    # (card, isRetry): a card answered wrongly is added to the end once more.
+    queue = [(eachCard, False) for eachCard in selectedCards]
     askCard = ASK_FUNCTIONS[mode]
     summary = {"reviewed": 0, "correct": 0, "wrong": 0, "stopped": False}
-    position = 0
 
-    while position < len(queue):
-        card, isRetry = queue[position]
-        position += 1
-
+    # Cards added to the end of the queue while it is being read are still reached by
+    # this loop.
+    for card, isRetry in queue:
         if isRetry:
             title = "Try again"
         else:
@@ -489,21 +527,27 @@ def reviewCards(
 
         showOutcome(card, isCorrect, mode)
 
-        if not isRetry:
-            summary["reviewed"] += 1
+        if isRetry:
+            continue
 
-            if isCorrect:
-                summary["correct"] += 1
-            else:
-                summary["wrong"] += 1
-                queue.append((card, True))
+        summary["reviewed"] += 1
 
-            if updateSchedule:
-                leitnerScheduler.recordAnswer(card, isCorrect, today)
-                whenNext = leitnerScheduler.describeNextReview(card, today)
-                print(ChatColor.paint(f"Box {card.box} · next review {whenNext}", ChatColor.DARK_GRAY))
+        if isCorrect:
+            summary["correct"] += 1
+        else:
+            summary["wrong"] += 1
+            queue.append((card, True))
 
-                if saveProgress is not None:
-                    saveProgress()
+        if updateSchedule:
+            leitnerScheduler.recordAnswer(card, isCorrect, today)
+            whenNext = leitnerScheduler.describeNextReview(card, today)
+            print(
+                ChatColor.paint(
+                    f"Box {card.box} · next review {whenNext}", ChatColor.DARK_GRAY
+                )
+            )
+
+            if saveProgress is not None:
+                saveProgress()
 
     return summary

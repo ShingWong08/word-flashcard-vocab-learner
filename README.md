@@ -46,6 +46,10 @@ pip install ".[ocr]"          # + import from scans and photos (also needs Tesse
 pip install ".[dev]"          # + pytest
 ```
 
+`requirements.txt` lists the same packages without versions, so `pip install -r requirements.txt`
+installs the newest release of each (remove the `#` in front of the optional ones you need).
+It only installs the packages: `pip install .` is what adds the `word-flashcard` command.
+
 ## API keys and settings
 
 Copy `.env.example` to `.env` and fill in the keys you need. `.env` is git-ignored; never commit it.

@@ -1,29 +1,28 @@
 import os
 import sys
 
-
 STANDARD_OUTPUT_HANDLE = -11
 ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
 
 
 def _enableWindowsANSI() -> None:
-
     """
     Turn on ANSI escape code support in older Windows consoles.
-    Newer terminals (e.g. Windows Terminal) already support colors, so failures are ignored.
+    Newer terminals (e.g. Windows Terminal) already support colors, so failures are
+    ignored.
     """
 
     try:
         import ctypes
 
         kernel32 = ctypes.windll.kernel32
-        consoleHandle = kernel32.GetStdHandle(STANDARD_OUTPUT_HANDLE)
-        currentMode = ctypes.c_uint32()
+        handle = kernel32.GetStdHandle(STANDARD_OUTPUT_HANDLE)
+        mode = ctypes.c_uint32()
 
-        isConsole = kernel32.GetConsoleMode(consoleHandle, ctypes.byref(currentMode))
-        if isConsole:
-            newMode = currentMode.value | ENABLE_VIRTUAL_TERMINAL_PROCESSING
-            kernel32.SetConsoleMode(consoleHandle, newMode)
+        if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            kernel32.SetConsoleMode(
+                handle, mode.value | ENABLE_VIRTUAL_TERMINAL_PROCESSING
+            )
     except Exception:
         pass
 
@@ -33,13 +32,13 @@ if os.name == "nt":
 
 
 class ChatColor:
-
     """
-    A class that defines ANSI escape codes for various text colors and formatting in the terminal.
+    A class that defines ANSI escape codes for various text colors and formatting in the
+    terminal.
 
-    Use ChatColor.paint(text, *styles) to color text. Colors are skipped automatically when
-    output is not a terminal (e.g. redirected to a file or captured by tests) or when the
-    NO_COLOR environment variable is set.
+    Use ChatColor.paint(text, *styles) to color text. Colors are skipped automatically
+    when output is not a terminal (e.g. redirected to a file or captured by tests) or
+    when the NO_COLOR environment variable is set.
     """
 
     # Dark colors
@@ -88,14 +87,13 @@ class ChatColor:
     BG_BRIGHT_GRAY = "\033[47m"
 
     # Special formatting
-    RESET = "\33[0m"
-    BOLD = "\33[1m"
-    UNDERLINE = "\33[4m"
-    REVERSED = "\33[7m"
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
+    REVERSED = "\033[7m"
 
     @staticmethod
     def isEnabled() -> bool:
-
         """
         Return True when colors should be printed.
         Colors are turned off when NO_COLOR is set or when output is not a terminal.
@@ -104,26 +102,16 @@ class ChatColor:
         if os.environ.get("NO_COLOR"):
             return False
 
-        if not hasattr(sys.stdout, "isatty"):
-            return False
-
-        return sys.stdout.isatty()
+        return hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
 
     @classmethod
     def paint(cls, text: object, *styles: str) -> str:
-
         """
         Wrap text in the given styles and reset the style afterwards.
         Example: ChatColor.paint("Done!", ChatColor.BOLD, ChatColor.GREEN)
         """
 
-        plainText = str(text)
+        if not styles or not cls.isEnabled():
+            return str(text)
 
-        if len(styles) == 0:
-            return plainText
-
-        if not cls.isEnabled():
-            return plainText
-
-        styleCodes = "".join(styles)
-        return styleCodes + plainText + cls.RESET
+        return "".join(styles) + str(text) + cls.RESET

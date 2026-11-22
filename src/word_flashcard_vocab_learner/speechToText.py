@@ -4,19 +4,16 @@ from datetime import datetime
 import pyperclip
 import sounddevice
 import soundfile
-from dotenv import find_dotenv, load_dotenv
 from elevenlabs.client import ElevenLabs
 
 from word_flashcard_vocab_learner.chatColor import ChatColor
 
-load_dotenv(find_dotenv(usecwd=True))
-
-
 YES_ANSWERS = ["yes", "y"]
 
 
-def getRecording(seconds: int, sampleRate: int = 16000, outputDir: str = "recording") -> str:
-
+def getRecording(
+    seconds: int, sampleRate: int = 16000, outputDir: str = "recording"
+) -> str:
     """
     Record audio from the microphone for a specified duration and save it as a WAV file.
     Parameters:
@@ -24,7 +21,8 @@ def getRecording(seconds: int, sampleRate: int = 16000, outputDir: str = "record
             - seconds (int): Duration of the recording in seconds.
         Optional:
             - sampleRate (int): Sampling rate for the recording.
-            - outputDir (str): Folder to save the recording in (relative to the current working directory).
+            - outputDir (str): Folder to save the recording in (relative to the current
+              working directory).
         Default:
             - sampleRate: 16000 Hz
             - outputDir: "recording"
@@ -32,19 +30,29 @@ def getRecording(seconds: int, sampleRate: int = 16000, outputDir: str = "record
         str: Path of the saved WAV file.
     """
 
-    print(ChatColor.paint(f"Please record your audio. This will record for {seconds} seconds.", ChatColor.CYAN))
+    print(
+        ChatColor.paint(
+            f"Please record your audio. This will record for {seconds} seconds.",
+            ChatColor.CYAN,
+        )
+    )
     input(ChatColor.paint("Press Enter to start recording...", ChatColor.YELLOW))
     print(ChatColor.paint("Recording...", ChatColor.BOLD, ChatColor.RED))
 
-    numberOfSamples = int(seconds * sampleRate)
-    recording = sounddevice.rec(numberOfSamples, samplerate=sampleRate, channels=1, blocking=True)
+    recording = sounddevice.rec(
+        int(seconds * sampleRate), samplerate=sampleRate, channels=1, blocking=True
+    )
 
     os.makedirs(outputDir, exist_ok=True)
+    filePath = os.path.join(
+        outputDir, datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".wav"
+    )
 
-    currentTime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    filePath = os.path.join(outputDir, currentTime + ".wav")
-
-    print(ChatColor.paint(f"Recording complete. Saving to '{filePath}'...", ChatColor.BLUE))
+    print(
+        ChatColor.paint(
+            f"Recording complete. Saving to '{filePath}'...", ChatColor.BLUE
+        )
+    )
     soundfile.write(filePath, recording, sampleRate)
     print(ChatColor.paint("Audio saved successfully.", ChatColor.GREEN))
 
@@ -58,17 +66,18 @@ def speechToText(
     languageCode: str = "eng",
     deleteAfter: bool = True,
 ) -> str:
-
     """
     Convert speech from an audio file to text using the ElevenLabs API.
     Parameters:
         Mandatory:
             - audioFile (str): Path to the audio file to be converted.
         Optional:
-            - apiKey (str): The API key for ElevenLabs. Falls back to the ELEVENLABS_API_KEY environment variable.
+            - apiKey (str): The API key for ElevenLabs. Falls back to the
+              ELEVENLABS_API_KEY environment variable.
             - modelID (str): The ID of the model to use for speech-to-text conversion.
             - languageCode (str): The language code for the audio file.
-            - deleteAfter (bool): Delete the audio file after a successful transcription.
+            - deleteAfter (bool): Delete the audio file after a successful
+              transcription.
         Default:
             - apiKey: ELEVENLABS_API_KEY from .env
             - modelID: "scribe_v2"
@@ -103,37 +112,45 @@ def speechToText(
 
 
 def editTranscription(transcription: str) -> str:
-
     """
     Give the user the option to edit the transcription.
-    If the user chooses to edit, the transcription is copied to the clipboard so it can be
-    pasted and edited at the prompt. An empty answer keeps the original transcription.
+    If the user chooses to edit, the transcription is copied to the clipboard so it can
+    be pasted and edited at the prompt. An empty answer keeps the original
+    transcription.
 
     Parameters:
         Mandatory:
             - transcription (str): The transcription text to be edited.
     """
 
-    print(ChatColor.paint("Transcription:", ChatColor.BOLD), ChatColor.paint(transcription, ChatColor.VIOLET))
+    print(
+        ChatColor.paint("Transcription:", ChatColor.BOLD),
+        ChatColor.paint(transcription, ChatColor.VIOLET),
+    )
 
-    answer = input(ChatColor.paint("Would you like to edit the transcription? (Yes / No) ", ChatColor.YELLOW))
-    wantsToEdit = answer.strip().lower() in YES_ANSWERS
+    answer = input(
+        ChatColor.paint(
+            "Would you like to edit the transcription? (Yes / No) ", ChatColor.YELLOW
+        )
+    )
 
-    if not wantsToEdit:
+    if answer.strip().lower() not in YES_ANSWERS:
         return transcription
 
     pyperclip.copy(transcription)
 
-    editPrompt = "The transcription has been copied to your clipboard. Paste it, edit it, then press Enter: "
+    editPrompt = (
+        "The transcription has been copied to your clipboard. "
+        "Paste it, edit it, then press Enter: "
+    )
     newTranscription = input(ChatColor.paint(editPrompt, ChatColor.YELLOW)).strip()
 
-    if newTranscription == "":
-        return transcription
-
-    return newTranscription
+    return newTranscription or transcription
 
 
 if __name__ == "__main__":
     result = speechToText(getRecording(seconds=5))
-    editedResult = editTranscription(result)
-    print(ChatColor.paint("Final Transcription:", ChatColor.BOLD, ChatColor.GREEN), editedResult)
+    print(
+        ChatColor.paint("Final Transcription:", ChatColor.BOLD, ChatColor.GREEN),
+        editTranscription(result),
+    )

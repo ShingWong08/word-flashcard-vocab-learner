@@ -25,6 +25,7 @@ def words(cards):
 
 # ---------- Choosing cards ----------
 
+
 @pytest.mark.parametrize(
     "answer, expected",
     [
@@ -47,7 +48,7 @@ def words(cards):
         ("1, 1, accept", ["accept"]),
     ],
 )
-def test_select_cards(answer, expected):
+def testSelectCards(answer, expected):
     selected, problems = removeWords.selectCards(answer, numbered(makeDeck()))
 
     assert problems == []
@@ -65,15 +66,17 @@ def test_select_cards(answer, expected):
         ("box 3", "There are no cards in box 3."),
     ],
 )
-def test_select_cards_reports_problems(answer, problem):
+def testSelectCardsReportsProblems(answer, problem):
     selected, problems = removeWords.selectCards(answer, numbered(makeDeck()))
 
     assert selected == []
     assert problems == [problem]
 
 
-def test_select_cards_reports_every_problem_but_keeps_valid_parts():
-    selected, problems = removeWords.selectCards("banana, apple, 9", numbered(makeDeck()))
+def testSelectCardsReportsEveryProblemButKeepsValidParts():
+    selected, problems = removeWords.selectCards(
+        "banana, apple, 9", numbered(makeDeck())
+    )
 
     assert words(selected) == ["banana"]
     assert len(problems) == 2
@@ -81,7 +84,8 @@ def test_select_cards_reports_every_problem_but_keeps_valid_parts():
 
 # ---------- Removing and undoing ----------
 
-def test_remove_and_undo_keep_progress(tmp_path):
+
+def testRemoveAndUndoKeepProgress(tmp_path):
     path = str(tmp_path / "deck.json")
     cards = makeDeck()
     cardDeck.saveDeck(cards, path)
@@ -99,7 +103,7 @@ def test_remove_and_undo_keep_progress(tmp_path):
     assert (savedCard.box, savedCard.correctCount) == (5, 4)
 
 
-def test_undo_skips_words_added_again(tmp_path):
+def testUndoSkipsWordsAddedAgain(tmp_path):
     path = str(tmp_path / "deck.json")
     cards = [Card("cat", ["a new card"])]
 
@@ -110,6 +114,7 @@ def test_undo_skips_words_added_again(tmp_path):
 
 
 # ---------- The whole screen ----------
+
 
 def runScreen(tmp_path, typeAnswers, answers, cards=None):
     path = str(tmp_path / "deck.json")
@@ -123,7 +128,7 @@ def runScreen(tmp_path, typeAnswers, answers, cards=None):
     return cards, path
 
 
-def test_screen_lists_numbered_words_and_box_counts(tmp_path, typeAnswers, capsys):
+def testScreenListsNumberedWordsAndBoxCounts(tmp_path, typeAnswers, capsys):
     runScreen(tmp_path, typeAnswers, [""])
 
     out = capsys.readouterr().out
@@ -133,7 +138,7 @@ def test_screen_lists_numbered_words_and_box_counts(tmp_path, typeAnswers, capsy
     assert "What to remove:" in out
 
 
-def test_screen_removes_by_number_after_confirmation(tmp_path, typeAnswers, capsys):
+def testScreenRemovesByNumberAfterConfirmation(tmp_path, typeAnswers, capsys):
     cards, path = runScreen(tmp_path, typeAnswers, ["1, 4", "y", ""])
 
     out = capsys.readouterr().out
@@ -143,7 +148,7 @@ def test_screen_removes_by_number_after_confirmation(tmp_path, typeAnswers, caps
     assert words(cardDeck.loadDeck(path)) == ["ambiguous", "ice cream", "ambition"]
 
 
-def test_screen_shows_new_numbers_after_removal(tmp_path, typeAnswers, capsys):
+def testScreenShowsNewNumbersAfterRemoval(tmp_path, typeAnswers, capsys):
     runScreen(tmp_path, typeAnswers, ["accept", "y", ""])
 
     out = capsys.readouterr().out
@@ -153,14 +158,14 @@ def test_screen_shows_new_numbers_after_removal(tmp_path, typeAnswers, capsys):
     assert "1. ambiguous" in out.split("The numbers have changed:")[1]
 
 
-def test_screen_cancel_removes_nothing(tmp_path, typeAnswers, capsys):
+def testScreenCancelRemovesNothing(tmp_path, typeAnswers, capsys):
     cards, path = runScreen(tmp_path, typeAnswers, ["banana", "n", ""])
 
     assert "Nothing was removed." in capsys.readouterr().out
     assert len(cardDeck.loadDeck(path)) == 5
 
 
-def test_screen_with_a_typo_removes_nothing(tmp_path, typeAnswers, capsys):
+def testScreenWithATypoRemovesNothing(tmp_path, typeAnswers, capsys):
     cards, path = runScreen(tmp_path, typeAnswers, ["banana, bananna", ""])
 
     out = capsys.readouterr().out
@@ -169,8 +174,10 @@ def test_screen_with_a_typo_removes_nothing(tmp_path, typeAnswers, capsys):
     assert len(cards) == 5
 
 
-def test_remove_all_needs_typed_confirmation(tmp_path, typeAnswers, capsys):
-    cards, path = runScreen(tmp_path, typeAnswers, ["all", "y", "all", "delete all", ""])
+def testRemoveAllNeedsTypedConfirmation(tmp_path, typeAnswers, capsys):
+    cards, path = runScreen(
+        tmp_path, typeAnswers, ["all", "y", "all", "delete all", ""]
+    )
 
     out = capsys.readouterr().out
     assert "Nothing was removed." in out
@@ -181,8 +188,10 @@ def test_remove_all_needs_typed_confirmation(tmp_path, typeAnswers, capsys):
     assert len(cardDeck.loadDeck(cardDeck.backupPath(path))) == 5
 
 
-def test_undo_after_remove_all(tmp_path, typeAnswers, capsys):
-    cards, path = runScreen(tmp_path, typeAnswers, ["all", "DELETE ALL", "1", "u", "u", ""])
+def testUndoAfterRemoveAll(tmp_path, typeAnswers, capsys):
+    cards, path = runScreen(
+        tmp_path, typeAnswers, ["all", "DELETE ALL", "1", "u", "u", ""]
+    )
 
     out = capsys.readouterr().out
     assert "Your deck is empty. Type u to undo" in out
@@ -191,13 +200,21 @@ def test_undo_after_remove_all(tmp_path, typeAnswers, capsys):
     assert len(cardDeck.loadDeck(path)) == 5
 
 
-def test_undo_twice_restores_both_removals(tmp_path, typeAnswers):
-    cards, path = runScreen(tmp_path, typeAnswers, ["banana", "y", "accept", "y", "u", "u", ""])
+def testUndoTwiceRestoresBothRemovals(tmp_path, typeAnswers):
+    cards, path = runScreen(
+        tmp_path, typeAnswers, ["banana", "y", "accept", "y", "u", "u", ""]
+    )
 
-    assert sorted(words(cards)) == ["accept", "ambiguous", "ambition", "banana", "ice cream"]
+    assert sorted(words(cards)) == [
+        "accept",
+        "ambiguous",
+        "ambition",
+        "banana",
+        "ice cream",
+    ]
 
 
-def test_list_and_help_commands(tmp_path, typeAnswers, capsys):
+def testListAndHelpCommands(tmp_path, typeAnswers, capsys):
     runScreen(tmp_path, typeAnswers, ["banana", "y", "l", "h", ""])
 
     out = capsys.readouterr().out
@@ -205,7 +222,7 @@ def test_list_and_help_commands(tmp_path, typeAnswers, capsys):
     assert out.count("What to remove:") == 2
 
 
-def test_empty_deck(tmp_path, typeAnswers, capsys):
+def testEmptyDeck(tmp_path, typeAnswers, capsys):
     typeAnswers([])
     removeWords.removeWords([], str(tmp_path / "deck.json"))
 

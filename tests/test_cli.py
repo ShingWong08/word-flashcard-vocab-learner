@@ -7,8 +7,11 @@ from word_flashcard_vocab_learner import cardDeck, genAITutor
 from word_flashcard_vocab_learner import connectFreeDictionaryAPI as dictionary
 from word_flashcard_vocab_learner.flashCard import Card
 
-
-CAT_LOOKUP = {"word": "cat", "definitions": ["a pet"], "examples": [["My cat is asleep."]]}
+CAT_LOOKUP = {
+    "word": "cat",
+    "definitions": ["a pet"],
+    "examples": [["My cat is asleep."]],
+}
 
 
 def fakeLookup(monkeypatch):
@@ -27,7 +30,7 @@ def saveCat(tmp_path, nextReview=None):
     cardDeck.saveDeck([card], deckPath(tmp_path))
 
 
-def test_look_up_word_and_add_it_to_deck(monkeypatch, capsys, tmp_path, typeAnswers):
+def testLookUpWordAndAddItToDeck(monkeypatch, capsys, tmp_path, typeAnswers):
     fakeLookup(monkeypatch)
     typeAnswers(["1", "cat", "y", "", "q"])
 
@@ -45,7 +48,9 @@ def test_look_up_word_and_add_it_to_deck(monkeypatch, capsys, tmp_path, typeAnsw
     assert [eachCard.word for eachCard in savedCards] == ["cat"]
 
 
-def test_translation_is_shown_and_saved_when_ai_is_set_up(monkeypatch, capsys, tmp_path, typeAnswers):
+def testTranslationIsShownAndSavedWhenAiIsSetUp(
+    monkeypatch, capsys, tmp_path, typeAnswers
+):
     fakeLookup(monkeypatch)
     monkeypatch.setenv("LLM_API_KEY", "test")
     monkeypatch.setattr(genAITutor, "translateWord", lambda word, definition: "貓")
@@ -57,7 +62,7 @@ def test_translation_is_shown_and_saved_when_ai_is_set_up(monkeypatch, capsys, t
     assert cardDeck.loadDeck(deckPath(tmp_path))[0].translation == "貓"
 
 
-def test_word_already_in_deck_is_not_offered_again(monkeypatch, capsys, tmp_path, typeAnswers):
+def testWordAlreadyInDeckIsNotOfferedAgain(monkeypatch, capsys, tmp_path, typeAnswers):
     fakeLookup(monkeypatch)
     saveCat(tmp_path)
     typeAnswers(["1", "cat", "", "q"])
@@ -67,7 +72,7 @@ def test_word_already_in_deck_is_not_offered_again(monkeypatch, capsys, tmp_path
     assert '"cat" is already in your deck (box 1).' in capsys.readouterr().out
 
 
-def test_main_survives_network_error(monkeypatch, capsys, tmp_path, typeAnswers):
+def testMainSurvivesNetworkError(monkeypatch, capsys, tmp_path, typeAnswers):
     def fail(word):
         raise requests.ConnectionError("offline")
 
@@ -81,7 +86,7 @@ def test_main_survives_network_error(monkeypatch, capsys, tmp_path, typeAnswers)
     assert "Goodbye!" in out
 
 
-def test_review_due_card_in_spelling_mode(capsys, tmp_path, typeAnswers):
+def testReviewDueCardInSpellingMode(capsys, tmp_path, typeAnswers):
     saveCat(tmp_path)
     typeAnswers(["2", "2", "cat", "q"])
 
@@ -100,7 +105,7 @@ def test_review_due_card_in_spelling_mode(capsys, tmp_path, typeAnswers):
     assert savedCard.correctCount == 1
 
 
-def test_no_due_cards_offers_practice(capsys, tmp_path, typeAnswers):
+def testNoDueCardsOffersPractice(capsys, tmp_path, typeAnswers):
     saveCat(tmp_path, nextReview="2999-01-01")
     typeAnswers(["2", "n", "q"])
 
@@ -109,7 +114,7 @@ def test_no_due_cards_offers_practice(capsys, tmp_path, typeAnswers):
     assert "No cards are due today. Next review: 2999-01-01." in capsys.readouterr().out
 
 
-def test_review_empty_deck(capsys, tmp_path, typeAnswers):
+def testReviewEmptyDeck(capsys, tmp_path, typeAnswers):
     typeAnswers(["2", "q"])
 
     app.main(deckPath(tmp_path))
@@ -117,7 +122,7 @@ def test_review_empty_deck(capsys, tmp_path, typeAnswers):
     assert "Your deck is empty" in capsys.readouterr().out
 
 
-def test_view_deck(capsys, tmp_path, typeAnswers):
+def testViewDeck(capsys, tmp_path, typeAnswers):
     saveCat(tmp_path)
     typeAnswers(["4", "q"])
 
@@ -129,13 +134,20 @@ def test_view_deck(capsys, tmp_path, typeAnswers):
     assert "貓" in out
 
 
-LONG_TRANSLATION = "這是一個非常長的中文翻譯，用來測試表格會不會超出畫面寬度，看起來會折行"
+LONG_TRANSLATION = (
+    "這是一個非常長的中文翻譯，用來測試表格會不會超出畫面寬度，看起來會折行"
+)
 
 
-def test_view_deck_shortens_a_long_translation_to_fit_the_table(capsys, tmp_path, typeAnswers, monkeypatch):
+def testViewDeckShortensALongTranslationToFitTheTable(
+    capsys, tmp_path, typeAnswers, monkeypatch
+):
     monkeypatch.setenv("COLUMNS", "80")
     longWord = "pneumonoultramicroscopicsilicovolcanoconiosis"
-    cards = [Card(longWord, ["a lung disease"], [[]], LONG_TRANSLATION), Card("cat", ["a pet"], [[]], LONG_TRANSLATION)]
+    cards = [
+        Card(longWord, ["a lung disease"], [[]], LONG_TRANSLATION),
+        Card("cat", ["a pet"], [[]], LONG_TRANSLATION),
+    ]
     cardDeck.saveDeck(cards, deckPath(tmp_path))
     typeAnswers(["4", "q"])
 
@@ -143,26 +155,36 @@ def test_view_deck_shortens_a_long_translation_to_fit_the_table(capsys, tmp_path
 
     out = capsys.readouterr().out
     tableLines = out.split("Your deck:")[1].split("Saved in:")[0].splitlines()
-    assert max(len(eachLine) for eachLine in tableLines) <= 80    # no row wraps past the edge
-    assert "…" in out                                             # the translation is shortened, not dropped
+    assert (
+        max(len(eachLine) for eachLine in tableLines) <= 80
+    )  # no row wraps past the edge
+    assert "…" in out  # the translation is shortened, not dropped
     assert "這是一個非常長的中文翻譯" in out
 
 
-def test_view_deck_shortens_a_long_translation_in_a_narrow_terminal(capsys, tmp_path, typeAnswers, monkeypatch):
+def testViewDeckShortensALongTranslationInANarrowTerminal(
+    capsys, tmp_path, typeAnswers, monkeypatch
+):
     monkeypatch.setenv("COLUMNS", "40")
-    cardDeck.saveDeck([Card("cat", ["a pet"], [[]], LONG_TRANSLATION)], deckPath(tmp_path))
+    cardDeck.saveDeck(
+        [Card("cat", ["a pet"], [[]], LONG_TRANSLATION)], deckPath(tmp_path)
+    )
     typeAnswers(["4", "q"])
 
     app.main(deckPath(tmp_path))
 
     out = capsys.readouterr().out
-    translationLines = [eachLine for eachLine in out.splitlines() if eachLine.strip().startswith("這是一個")]
+    translationLines = [
+        eachLine
+        for eachLine in out.splitlines()
+        if eachLine.strip().startswith("這是一個")
+    ]
     assert len(translationLines) == 1
     assert len(translationLines[0]) <= 40
     assert translationLines[0].strip().endswith("…")
 
 
-def test_remove_word(capsys, tmp_path, typeAnswers):
+def testRemoveWord(capsys, tmp_path, typeAnswers):
     saveCat(tmp_path)
     typeAnswers(["7", "CAT", "y", "", "q"])
 
@@ -172,7 +194,7 @@ def test_remove_word(capsys, tmp_path, typeAnswers):
     assert cardDeck.loadDeck(deckPath(tmp_path)) == []
 
 
-def test_damaged_deck_is_not_overwritten(capsys, tmp_path, typeAnswers):
+def testDamagedDeckIsNotOverwritten(capsys, tmp_path, typeAnswers):
     path = tmp_path / "deck.json"
     path.write_text("{broken", encoding="utf-8")
     typeAnswers([])
@@ -183,7 +205,7 @@ def test_damaged_deck_is_not_overwritten(capsys, tmp_path, typeAnswers):
     assert path.read_text(encoding="utf-8") == "{broken"
 
 
-def test_unknown_menu_choice(capsys, tmp_path, typeAnswers):
+def testUnknownMenuChoice(capsys, tmp_path, typeAnswers):
     typeAnswers(["x", "q"])
 
     app.main(deckPath(tmp_path))
@@ -191,7 +213,7 @@ def test_unknown_menu_choice(capsys, tmp_path, typeAnswers):
     assert "Please choose 1 - 9, c or q." in capsys.readouterr().out
 
 
-def test_main_uses_default_deck_path(capsys, tmp_path, typeAnswers):
+def testMainUsesDefaultDeckPath(capsys, tmp_path, typeAnswers):
     typeAnswers(["q"])
 
     app.main()
@@ -199,7 +221,7 @@ def test_main_uses_default_deck_path(capsys, tmp_path, typeAnswers):
     assert "Your deck has 0 words" in capsys.readouterr().out
 
 
-def test_menu_shows_due_count(capsys, tmp_path, typeAnswers):
+def testMenuShowsDueCount(capsys, tmp_path, typeAnswers):
     saveCat(tmp_path)
     typeAnswers(["q"])
 
@@ -208,7 +230,7 @@ def test_menu_shows_due_count(capsys, tmp_path, typeAnswers):
     assert "2. Review cards  (1 due)" in capsys.readouterr().out
 
 
-def test_clear_screen_command(monkeypatch, tmp_path, typeAnswers):
+def testClearScreenCommand(monkeypatch, tmp_path, typeAnswers):
     cleared = []
     monkeypatch.setattr(app.terminalDisplay, "clearScreen", lambda: cleared.append(1))
     typeAnswers(["clear", "c", "q"])
@@ -218,9 +240,11 @@ def test_clear_screen_command(monkeypatch, tmp_path, typeAnswers):
     assert len(cleared) == 2
 
 
-def test_import_words_from_text_file(monkeypatch, capsys, tmp_path, typeAnswers):
+def testImportWordsFromTextFile(monkeypatch, capsys, tmp_path, typeAnswers):
     wordList = tmp_path / "words.txt"
-    wordList.write_text("1. ambiguous - unclear\n2. cat - 貓\n3. qwzx\n", encoding="utf-8")
+    wordList.write_text(
+        "1. ambiguous - unclear\n2. cat - 貓\n3. qwzx\n", encoding="utf-8"
+    )
 
     def fakeGetWordDefinition(word):
         if word == "qwzx":
@@ -237,10 +261,13 @@ def test_import_words_from_text_file(monkeypatch, capsys, tmp_path, typeAnswers)
     assert "1. ambiguous" in out
     assert "skipped: not found in the dictionary" in out
     assert "Added 2, skipped 1." in out
-    assert [eachCard.word for eachCard in cardDeck.loadDeck(deckPath(tmp_path))] == ["ambiguous", "cat"]
+    assert [eachCard.word for eachCard in cardDeck.loadDeck(deckPath(tmp_path))] == [
+        "ambiguous",
+        "cat",
+    ]
 
 
-def test_progress_screen(capsys, tmp_path, typeAnswers):
+def testProgressScreen(capsys, tmp_path, typeAnswers):
     saveCat(tmp_path)
     typeAnswers(["5", "q"])
 
@@ -251,7 +278,7 @@ def test_progress_screen(capsys, tmp_path, typeAnswers):
     assert "Words in deck     1" in out
 
 
-def test_export_deck(capsys, tmp_path, typeAnswers):
+def testExportDeck(capsys, tmp_path, typeAnswers):
     saveCat(tmp_path)
     exportPath = tmp_path / "my words"
     typeAnswers(["6", str(exportPath), "q"])
@@ -262,7 +289,7 @@ def test_export_deck(capsys, tmp_path, typeAnswers):
     assert "貓" in (tmp_path / "my words.csv").read_text(encoding="utf-8-sig")
 
 
-def test_export_asks_before_replacing(capsys, tmp_path, typeAnswers):
+def testExportAsksBeforeReplacing(capsys, tmp_path, typeAnswers):
     saveCat(tmp_path)
     existing = tmp_path / "old.csv"
     existing.write_text("keep me", encoding="utf-8")
@@ -273,7 +300,7 @@ def test_export_asks_before_replacing(capsys, tmp_path, typeAnswers):
     assert existing.read_text(encoding="utf-8") == "keep me"
 
 
-def test_edit_card_changes_word_translation_and_meaning(capsys, tmp_path, typeAnswers):
+def testEditCardChangesWordTranslationAndMeaning(capsys, tmp_path, typeAnswers):
     saveCat(tmp_path)
     typeAnswers(["8", "cat", "", "貓咪", "a small pet", "q"])
 
@@ -287,7 +314,7 @@ def test_edit_card_changes_word_translation_and_meaning(capsys, tmp_path, typeAn
     assert savedCard.definitions == ["a small pet"]
 
 
-def test_edit_card_keeps_values_when_enter_is_pressed(capsys, tmp_path, typeAnswers):
+def testEditCardKeepsValuesWhenEnterIsPressed(capsys, tmp_path, typeAnswers):
     saveCat(tmp_path)
     typeAnswers(["8", "cat", "", "", "", "q"])
 
@@ -298,18 +325,23 @@ def test_edit_card_keeps_values_when_enter_is_pressed(capsys, tmp_path, typeAnsw
     assert savedCard.definitions == ["a pet"]
 
 
-def test_edit_card_refuses_a_word_that_is_already_in_the_deck(capsys, tmp_path, typeAnswers):
-    cardDeck.saveDeck([Card("cat", ["a pet"], [[]]), Card("dog", ["a pet"], [[]])], deckPath(tmp_path))
+def testEditCardRefusesAWordThatIsAlreadyInTheDeck(capsys, tmp_path, typeAnswers):
+    cardDeck.saveDeck(
+        [Card("cat", ["a pet"], [[]]), Card("dog", ["a pet"], [[]])], deckPath(tmp_path)
+    )
     typeAnswers(["8", "cat", "dog", "q"])
 
     app.main(deckPath(tmp_path))
 
     out = capsys.readouterr().out
     assert '"dog" is already in your deck' in out
-    assert [eachCard.word for eachCard in cardDeck.loadDeck(deckPath(tmp_path))] == ["cat", "dog"]
+    assert [eachCard.word for eachCard in cardDeck.loadDeck(deckPath(tmp_path))] == [
+        "cat",
+        "dog",
+    ]
 
 
-def test_practise_one_word(capsys, tmp_path, typeAnswers):
+def testPractiseOneWord(capsys, tmp_path, typeAnswers):
     saveCat(tmp_path, nextReview="2999-01-01")
     typeAnswers(["9", "cat", "1", "", "y", "q"])
 
@@ -323,23 +355,29 @@ def test_practise_one_word(capsys, tmp_path, typeAnswers):
     assert savedCard.correctCount == 1
 
 
-def test_view_a_long_deck_one_page_at_a_time(capsys, tmp_path, typeAnswers):
+def testViewALongDeckOnePageAtATime(capsys, tmp_path, typeAnswers):
     words = ["word" + str(index) for index in range(1, 36)]
-    cardDeck.saveDeck([Card(eachWord, ["a meaning"], [[]]) for eachWord in words], deckPath(tmp_path))
+    cardDeck.saveDeck(
+        [Card(eachWord, ["a meaning"], [[]]) for eachWord in words], deckPath(tmp_path)
+    )
     prompts = typeAnswers(["4", "", "", "q"])
 
     app.main(deckPath(tmp_path))
 
     out = capsys.readouterr().out
     assert "30 words per page" in out
-    assert prompts.count("Enter = next page, q = back: ") == 1    # 35 words = 2 pages, one prompt between them
-    assert out.count("Box  Next review") == 2                     # a header on every page
+    assert (
+        prompts.count("Enter = next page, q = back: ") == 1
+    )  # 35 words = 2 pages, one prompt between them
+    assert out.count("Box  Next review") == 2  # a header on every page
     assert "  Saved in:" in out
 
 
-def test_review_offers_to_carry_on_after_twenty_cards(capsys, tmp_path, typeAnswers):
+def testReviewOffersToCarryOnAfterTwentyCards(capsys, tmp_path, typeAnswers):
     words = ["word" + str(index) for index in range(1, 22)]
-    cardDeck.saveDeck([Card(eachWord, ["a meaning"], [[]]) for eachWord in words], deckPath(tmp_path))
+    cardDeck.saveDeck(
+        [Card(eachWord, ["a meaning"], [[]]) for eachWord in words], deckPath(tmp_path)
+    )
 
     answers = ["2", "1"]
     for _ in range(20):
@@ -352,19 +390,20 @@ def test_review_offers_to_carry_on_after_twenty_cards(capsys, tmp_path, typeAnsw
     out = capsys.readouterr().out
     assert "Continue with the next 1 card? (y/N) " in prompts
     assert out.count("Session finished") == 2
-    assert sum(eachCard.correctCount for eachCard in cardDeck.loadDeck(deckPath(tmp_path))) == 21
+    assert (
+        sum(eachCard.correctCount for eachCard in cardDeck.loadDeck(deckPath(tmp_path)))
+        == 21
+    )
 
 
-def test_review_keeps_going_when_the_deck_cannot_be_saved(capsys, tmp_path, typeAnswers):
+def testReviewKeepsGoingWhenTheDeckCannotBeSaved(
+    capsys, tmp_path, typeAnswers, makeDeckFolderReadOnly
+):
     saveCat(tmp_path)
-    folder = tmp_path
-    folder.chmod(0o555)
+    makeDeckFolderReadOnly()
 
-    try:
-        typeAnswers(["2", "2", "cat", "q"])
-        app.main(deckPath(tmp_path))
-    finally:
-        folder.chmod(0o755)
+    typeAnswers(["2", "2", "cat", "q"])
+    app.main(deckPath(tmp_path))
 
     out = capsys.readouterr().out
     assert "cannot be written" in out

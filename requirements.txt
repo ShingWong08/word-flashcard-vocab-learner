@@ -1,0 +1,27 @@
+# Packages the app needs. Install them with:
+#     pip install -r requirements.txt
+# No versions are pinned, so pip installs the newest release of each package.
+requests
+openai
+python-dotenv
+
+# Optional features: remove the "# " in front of the packages you want.
+
+# Speech: pronunciation, Listening and Speaking modes.
+# Recording also needs the PortAudio library; playing audio needs ffmpeg (ffplay).
+# elevenlabs
+# sounddevice
+# soundfile
+# pyperclip
+
+# Import words from PDF and Word (.docx) files.
+# pypdf
+# python-docx
+
+# Import words from photos and scanned pages (OCR). Also needs the Tesseract OCR program.
+# pytesseract
+# Pillow
+# pypdfium2
+
+# Run the tests.
+# pytest

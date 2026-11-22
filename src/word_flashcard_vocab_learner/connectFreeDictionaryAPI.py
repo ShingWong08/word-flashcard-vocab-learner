@@ -5,47 +5,55 @@ import requests
 from word_flashcard_vocab_learner import terminalDisplay
 from word_flashcard_vocab_learner.chatColor import ChatColor
 
-
+DICTIONARY_URL = "https://freedictionaryapi.com/api/v1/entries/en/"
 HTTP_NOT_FOUND = 404
+
+# One shared connection for every lookup: importing a word list looks up many words in a
+# row,
+# and reusing the connection skips a new HTTPS handshake for each of them.
+session = requests.Session()
 
 
 def getWordDefinition(
-    requiredWord: str,
-    dictionaryURL: str = "https://freedictionaryapi.com/api/v1/entries/en/",
-    otherArguments: str = "",
+    word: str,
+    dictionaryURL: str = DICTIONARY_URL,
+    query: str = "",
     maxDefinitions: int = 3,
-    maxExamplesPerDefinition: int = 2,
+    maxExamples: int = 2,
     timeout: float = 15,
 ) -> dict:
-
     """
-    Fetches the definitions and example sentences of a word from the Free Dictionary API.
+    Fetches the definitions and example sentences of a word from the Free Dictionary
+    API.
     Parameters:
         Mandatory:
-            - requiredWord (str): The word for which the definitions are to be fetched.
+            - word (str): The word for which the definitions are to be fetched.
         Optional:
             - dictionaryURL (str): The base URL of the Free Dictionary API.
-            - otherArguments (str): Additional query parameters for the API request (e.g. "?key=value").
+            - query (str): Additional query parameters for the API request (e.g.
+              "?key=value").
             - maxDefinitions (int): Maximum number of definitions to return.
-            - maxExamplesPerDefinition (int): Maximum number of example sentences for each definition.
+            - maxExamples (int): Maximum number of example sentences for each
+              definition.
             - timeout (float): Request timeout in seconds.
         Default:
             - dictionaryURL: "https://freedictionaryapi.com/api/v1/entries/en/"
-            - otherArguments: ""
+            - query: ""
             - maxDefinitions: 3
-            - maxExamplesPerDefinition: 2
+            - maxExamples: 2
             - timeout: 15
     Returns:
         dict: {"word": str, "definitions": list[str], "examples": list[list[str]]}
         "word" is the spelling the dictionary matched (e.g. "Jason" for "jason").
-        examples[i] holds the example sentences of definitions[i] (it can be an empty list).
+        examples[i] holds the example sentences of definitions[i] (it can be an empty
+        list).
         If the word is not found, "definitions" and "examples" are empty.
 
     The API is case-sensitive, so the word is tried as typed, then in lowercase,
     then capitalized ("jason" -> "Jason"), and the first match is used.
     """
 
-    word = requiredWord.strip()
+    word = word.strip()
     if word == "":
         raise ValueError("Word cannot be empty.")
 
@@ -53,53 +61,43 @@ def getWordDefinition(
     entries = []
 
     for eachSpelling in caseVariants(word):
-        entries = fetchEntries(eachSpelling, dictionaryURL, otherArguments, timeout)
+        entries = fetchEntries(eachSpelling, dictionaryURL, query, timeout)
 
-        if len(entries) > 0:
+        if entries:
             matchedWord = eachSpelling
             break
 
-    allDefinitions, allExamples = collectDefinitionsAndExamples(entries)
-
-    definitions = allDefinitions[:maxDefinitions]
-    examples = []
-
-    for eachExampleList in allExamples[:maxDefinitions]:
-        examples.append(eachExampleList[:maxExamplesPerDefinition])
+    definitions, examples = collectDefinitionsAndExamples(entries)
 
     return {
         "word": matchedWord,
-        "definitions": definitions,
-        "examples": examples,
+        "definitions": definitions[:maxDefinitions],
+        "examples": [
+            eachExamples[:maxExamples] for eachExamples in examples[:maxDefinitions]
+        ],
     }
 
 
-def fetchEntries(word: str, dictionaryURL: str, otherArguments: str, timeout: float) -> list:
-
+def fetchEntries(word: str, dictionaryURL: str, query: str, timeout: float) -> list:
     """
     Request one spelling from the API and return its entries.
     Returns an empty list if the word is not found.
     """
 
-    URL = dictionaryURL + quote(word, safe="") + otherArguments
-
-    response = requests.get(URL, timeout=timeout)
+    response = session.get(
+        dictionaryURL + quote(word, safe="") + query, timeout=timeout
+    )
 
     if response.status_code == HTTP_NOT_FOUND:
         return []
 
     response.raise_for_status()
-    data = response.json()
 
-    entries = data.get("entries")
-    if entries is None:
-        return []
-
-    return entries
+    entries = response.json().get("entries")
+    return [] if entries is None else entries
 
 
 def collectDefinitionsAndExamples(entries: list) -> tuple[list[str], list[list[str]]]:
-
     """
     Collect every definition and its example sentences from the entries,
     including sub-senses. The two lists line up: examples[i] belongs to definitions[i].
@@ -110,10 +108,7 @@ def collectDefinitionsAndExamples(entries: list) -> tuple[list[str], list[list[s
 
     for eachEntry in entries:
         for eachSense in eachEntry.get("senses", []):
-
-            meanings = [eachSense] + eachSense.get("subsenses", [])
-
-            for eachMeaning in meanings:
+            for eachMeaning in [eachSense, *eachSense.get("subsenses", [])]:
                 if "definition" in eachMeaning:
                     definitions.append(eachMeaning["definition"])
                     examples.append(eachMeaning.get("examples", []))
@@ -122,23 +117,15 @@ def collectDefinitionsAndExamples(entries: list) -> tuple[list[str], list[list[s
 
 
 def caseVariants(word: str) -> list[str]:
-
     """
     Spellings to try, in order, without duplicates: as typed, lowercase, capitalized.
     Example: "jason" -> ["jason", "Jason"]
     """
 
-    variants = []
-
-    for eachSpelling in [word, word.lower(), word.capitalize()]:
-        if eachSpelling not in variants:
-            variants.append(eachSpelling)
-
-    return variants
+    return list(dict.fromkeys([word, word.lower(), word.capitalize()]))
 
 
 def formatWordDefinition(result: dict) -> str:
-
     """
     Format the dict returned by getWordDefinition into readable text.
     Definitions are numbered, long lines are wrapped to the screen width,
@@ -157,36 +144,41 @@ def formatWordDefinition(result: dict) -> str:
     definitions = result["definitions"]
     examples = result["examples"]
 
-    if len(definitions) == 0:
+    if not definitions:
         return ChatColor.paint(f'No definition found for "{word}".', ChatColor.ORANGE)
 
-    titleStart = ChatColor.paint("Definitions of ", ChatColor.BOLD)
-    titleWord = ChatColor.paint(f'"{word}"', ChatColor.BOLD, ChatColor.VIOLET)
-    titleEnd = ChatColor.paint(":", ChatColor.BOLD)
-
-    lines = [titleStart + titleWord + titleEnd]
+    lines = [
+        ChatColor.paint("Definitions of ", ChatColor.BOLD)
+        + ChatColor.paint(f'"{word}"', ChatColor.BOLD, ChatColor.VIOLET)
+        + ChatColor.paint(":", ChatColor.BOLD)
+    ]
 
     for index, eachDefinition in enumerate(definitions):
         number = f"  {index + 1}. "
-        exampleIndent = " " * len(number)
+        examplePrefix = " " * len(number) + "> "
 
         lines.append("")
-        lines.append(terminalDisplay.wrapParagraph(eachDefinition, number, prefixStyles=(ChatColor.DARK_GRAY,)))
+        lines.append(
+            terminalDisplay.wrapParagraph(
+                eachDefinition, number, prefixStyles=(ChatColor.DARK_GRAY,)
+            )
+        )
 
         # A hand-edited card may have fewer example lists than definitions.
-        eachExamples = examples[index] if index < len(examples) else []
-
-        for eachExample in eachExamples:
-            lines.append(terminalDisplay.wrapParagraph(
-                eachExample,
-                exampleIndent + "> ",
-                prefixStyles=(ChatColor.DARK_GRAY,),
-                textStyles=(ChatColor.AQUA,),
-            ))
+        for eachExample in examples[index] if index < len(examples) else []:
+            lines.append(
+                terminalDisplay.wrapParagraph(
+                    eachExample,
+                    examplePrefix,
+                    prefixStyles=(ChatColor.DARK_GRAY,),
+                    textStyles=(ChatColor.AQUA,),
+                )
+            )
 
     return "\n".join(lines)
 
-def sendWordDefinition(word: str):
+
+def sendWordDefinition(word: str) -> str:
     return formatWordDefinition(getWordDefinition(word))
 
 

@@ -12,11 +12,11 @@ def makeCard(word, nextReview="2026-11-18", translation=""):
     return Card(word, [f"meaning of {word}"], [[]], translation, nextReview=nextReview)
 
 
-def test_missing_file_gives_empty_deck(tmp_path):
+def testMissingFileGivesEmptyDeck(tmp_path):
     assert cardDeck.loadDeck(str(tmp_path / "nothing.json")) == []
 
 
-def test_save_and_load_round_trip(tmp_path):
+def testSaveAndLoadRoundTrip(tmp_path):
     path = str(tmp_path / "folder" / "deck.json")
     cards = [makeCard("cat", translation="貓"), makeCard("dog")]
 
@@ -26,7 +26,7 @@ def test_save_and_load_round_trip(tmp_path):
     assert not os.path.exists(path + ".tmp")
 
 
-def test_saved_file_keeps_chinese_readable(tmp_path):
+def testSavedFileKeepsChineseReadable(tmp_path):
     path = str(tmp_path / "deck.json")
     cardDeck.saveDeck([makeCard("cat", translation="貓")], path)
 
@@ -34,8 +34,10 @@ def test_saved_file_keeps_chinese_readable(tmp_path):
         assert "貓" in deckFile.read()
 
 
-@pytest.mark.parametrize("content", ["{not json", '{"word": "cat"}', '["cat"]', '[{"definitions": []}]'])
-def test_damaged_file_raises_value_error(tmp_path, content):
+@pytest.mark.parametrize(
+    "content", ["{not json", '{"word": "cat"}', '["cat"]', '[{"definitions": []}]']
+)
+def testDamagedFileRaisesValueError(tmp_path, content):
     path = tmp_path / "deck.json"
     path.write_text(content, encoding="utf-8")
 
@@ -43,7 +45,7 @@ def test_damaged_file_raises_value_error(tmp_path, content):
         cardDeck.loadDeck(str(path))
 
 
-def test_add_card_refuses_duplicates_ignoring_case():
+def testAddCardRefusesDuplicatesIgnoringCase():
     cards = []
 
     assert cardDeck.addCard(cards, makeCard("Cat")) is True
@@ -51,7 +53,7 @@ def test_add_card_refuses_duplicates_ignoring_case():
     assert len(cards) == 1
 
 
-def test_find_and_remove_card():
+def testFindAndRemoveCard():
     cards = [makeCard("cat"), makeCard("dog")]
 
     assert cardDeck.findCard(cards, "  DOG ").word == "dog"
@@ -62,15 +64,19 @@ def test_find_and_remove_card():
     assert [eachCard.word for eachCard in cards] == ["dog"]
 
 
-def test_get_due_cards():
-    cards = [makeCard("past", "2026-11-17"), makeCard("today", "2026-11-18"), makeCard("future", "2026-11-19")]
+def testGetDueCards():
+    cards = [
+        makeCard("past", "2026-11-17"),
+        makeCard("today", "2026-11-18"),
+        makeCard("future", "2026-11-19"),
+    ]
 
     dueCards = cardDeck.getDueCards(cards, date(2026, 11, 18))
 
     assert [eachCard.word for eachCard in dueCards] == ["past", "today"]
 
 
-def test_backup_deck(tmp_path):
+def testBackupDeck(tmp_path):
     path = str(tmp_path / "deck.json")
 
     assert cardDeck.backupDeck(path) is None
@@ -82,22 +88,29 @@ def test_backup_deck(tmp_path):
     assert cardDeck.loadDeck(backup) == cardDeck.loadDeck(path)
 
 
-def test_sort_by_word_ignores_case():
+def testSortByWordIgnoresCase():
     cards = [makeCard("banana"), makeCard("Apple"), makeCard("cherry")]
-    assert [eachCard.word for eachCard in cardDeck.sortByWord(cards)] == ["Apple", "banana", "cherry"]
+    assert [eachCard.word for eachCard in cardDeck.sortByWord(cards)] == [
+        "Apple",
+        "banana",
+        "cherry",
+    ]
 
 
-def test_next_due_date():
+def testNextDueDate():
     assert cardDeck.nextDueDate([]) is None
-    assert cardDeck.nextDueDate([makeCard("a", "2026-12-05"), makeCard("b", "2026-11-30")]) == "2026-11-30"
+    assert (
+        cardDeck.nextDueDate([makeCard("a", "2026-12-05"), makeCard("b", "2026-11-30")])
+        == "2026-11-30"
+    )
 
 
-def test_default_deck_path_uses_environment_variable(monkeypatch):
+def testDefaultDeckPathUsesEnvironmentVariable(monkeypatch):
     monkeypatch.setenv("WORD_FLASHCARD_DECK", "custom.json")
     assert cardDeck.defaultDeckPath() == "custom.json"
 
 
-def test_default_deck_path_is_in_home_folder(monkeypatch):
+def testDefaultDeckPathIsInHomeFolder(monkeypatch):
     monkeypatch.delenv("WORD_FLASHCARD_DECK")
     expected = os.path.join(os.path.expanduser("~"), ".word_flashcard", "deck.json")
     assert cardDeck.defaultDeckPath() == expected
@@ -110,7 +123,7 @@ def anotherWindowSaves(path, cards):
         json.dump(data, deckFile, ensure_ascii=False)
 
 
-def test_load_deck_that_is_a_folder_gives_a_friendly_error(tmp_path):
+def testLoadDeckThatIsAFolderGivesAFriendlyError(tmp_path):
     folder = tmp_path / "deck"
     folder.mkdir()
 
@@ -118,7 +131,7 @@ def test_load_deck_that_is_a_folder_gives_a_friendly_error(tmp_path):
         cardDeck.loadDeck(str(folder))
 
 
-def test_word_added_in_another_window_is_kept(tmp_path):
+def testWordAddedInAnotherWindowIsKept(tmp_path):
     path = str(tmp_path / "deck.json")
     cardDeck.saveDeck([makeCard("cat")], path)
 
@@ -128,10 +141,14 @@ def test_word_added_in_another_window_is_kept(tmp_path):
     cards.append(makeCard("bird"))
     cardDeck.saveDeck(cards, path)
 
-    assert sorted(eachCard.word for eachCard in cardDeck.loadDeck(path)) == ["bird", "cat", "dog"]
+    assert sorted(eachCard.word for eachCard in cardDeck.loadDeck(path)) == [
+        "bird",
+        "cat",
+        "dog",
+    ]
 
 
-def test_word_removed_here_stays_removed(tmp_path):
+def testWordRemovedHereStaysRemoved(tmp_path):
     path = str(tmp_path / "deck.json")
     cardDeck.saveDeck([makeCard("cat"), makeCard("dog")], path)
 
@@ -147,12 +164,14 @@ def test_word_removed_here_stays_removed(tmp_path):
     assert "dog" in words
 
 
-def test_card_changed_here_wins_over_the_file_copy(tmp_path):
+def testCardChangedHereWinsOverTheFileCopy(tmp_path):
     path = str(tmp_path / "deck.json")
     cardDeck.saveDeck([makeCard("cat", nextReview="2026-11-18")], path)
 
     cards = cardDeck.loadDeck(path)
-    anotherWindowSaves(path, [makeCard("cat", nextReview="2026-11-18"), makeCard("dog")])
+    anotherWindowSaves(
+        path, [makeCard("cat", nextReview="2026-11-18"), makeCard("dog")]
+    )
 
     cardDeck.findCard(cards, "cat").box = 3
     cardDeck.saveDeck(cards, path)
@@ -161,7 +180,7 @@ def test_card_changed_here_wins_over_the_file_copy(tmp_path):
     assert savedCat.box == 3
 
 
-def test_unchanged_card_keeps_the_newer_copy_from_the_file(tmp_path):
+def testUnchangedCardKeepsTheNewerCopyFromTheFile(tmp_path):
     path = str(tmp_path / "deck.json")
     cardDeck.saveDeck([makeCard("cat", nextReview="2026-11-18")], path)
 
@@ -175,7 +194,7 @@ def test_unchanged_card_keeps_the_newer_copy_from_the_file(tmp_path):
     assert cardDeck.findCard(cards, "cat").nextReview == "2026-12-01"
 
 
-def test_saving_after_a_merge_leaves_a_note_for_the_user(tmp_path):
+def testSavingAfterAMergeLeavesANoteForTheUser(tmp_path):
     path = str(tmp_path / "deck.json")
     cardDeck.saveDeck([makeCard("cat")], path)
 
@@ -187,7 +206,7 @@ def test_saving_after_a_merge_leaves_a_note_for_the_user(tmp_path):
     assert cardDeck.takeMergeNote(path) is None
 
 
-def test_unreadable_file_is_copied_before_being_replaced(tmp_path):
+def testUnreadableFileIsCopiedBeforeBeingReplaced(tmp_path):
     path = str(tmp_path / "deck.json")
     cardDeck.saveDeck([makeCard("cat")], path)
 
@@ -202,7 +221,7 @@ def test_unreadable_file_is_copied_before_being_replaced(tmp_path):
     assert [eachCard.word for eachCard in cardDeck.loadDeck(path)] == ["cat", "dog"]
 
 
-def test_default_deck_path_expands_home_folder(monkeypatch):
+def testDefaultDeckPathExpandsHomeFolder(monkeypatch):
     monkeypatch.setenv("WORD_FLASHCARD_DECK", "~/custom/deck.json")
 
     path = cardDeck.defaultDeckPath()
@@ -211,48 +230,49 @@ def test_default_deck_path_expands_home_folder(monkeypatch):
     assert path.endswith(os.path.join("custom", "deck.json"))
 
 
-def test_default_deck_path_without_variable(monkeypatch):
+def testDefaultDeckPathWithoutVariable(monkeypatch):
     monkeypatch.delenv("WORD_FLASHCARD_DECK", raising=False)
     path = cardDeck.defaultDeckPath()
 
     assert path.endswith(os.path.join(".word_flashcard", "deck.json"))
 
 
-def test_save_raises_a_readable_error_when_the_folder_cannot_be_written(tmp_path):
-    folder = tmp_path / "read-only"
-    folder.mkdir()
-    path = str(folder / "deck.json")
+def testSaveRaisesAReadableErrorWhenTheFolderCannotBeWritten(
+    tmp_path, makeDeckFolderReadOnly
+):
+    path = str(tmp_path / "deck.json")
 
     cards = cardDeck.loadDeck(path)
     cards.append(makeCard("cat"))
 
-    folder.chmod(0o555)
-    try:
-        with pytest.raises(cardDeck.DeckSaveError) as error:
-            cardDeck.saveDeck(cards, path)
-    finally:
-        folder.chmod(0o755)
+    makeDeckFolderReadOnly()
+    with pytest.raises(cardDeck.DeckSaveError) as error:
+        cardDeck.saveDeck(cards, path)
 
     assert "cannot be written" in str(error.value)
     assert "permission denied" in str(error.value).lower()
     assert not os.path.exists(path + ".tmp")
 
 
-def test_save_does_not_read_the_file_again_when_nothing_changed(tmp_path, monkeypatch):
+def testSaveDoesNotReadTheFileAgainWhenNothingChanged(tmp_path, monkeypatch):
     path = str(tmp_path / "deck.json")
     cardDeck.saveDeck([makeCard("cat")], path)
 
     reads = []
     originalRead = cardDeck._readDeckData
-    monkeypatch.setattr(cardDeck, "_readDeckData", lambda eachPath: reads.append(eachPath) or originalRead(eachPath))
+    monkeypatch.setattr(
+        cardDeck,
+        "_readDeckData",
+        lambda eachPath: reads.append(eachPath) or originalRead(eachPath),
+    )
 
     cards = cardDeck.loadDeck(path)
     cardDeck.saveDeck(cards, path)
 
-    assert len(reads) == 1   # only the load, not the save
+    assert len(reads) == 1  # only the load, not the save
 
 
-def test_save_still_merges_when_another_window_wrote_in_the_meantime(tmp_path):
+def testSaveStillMergesWhenAnotherWindowWroteInTheMeantime(tmp_path):
     path = str(tmp_path / "deck.json")
     cardDeck.saveDeck([makeCard("cat")], path)
 
@@ -262,12 +282,19 @@ def test_save_still_merges_when_another_window_wrote_in_the_meantime(tmp_path):
     cardDeck.saveDeck(cards, path)
 
     # This window's cards come first, then the words that only the other window has.
-    assert [eachCard.word for eachCard in cardDeck.loadDeck(path)] == ["cat", "bird", "dog"]
+    assert [eachCard.word for eachCard in cardDeck.loadDeck(path)] == [
+        "cat",
+        "bird",
+        "dog",
+    ]
 
 
-def test_a_hand_edited_deck_with_wrong_types_still_loads(tmp_path):
+def testAHandEditedDeckWithWrongTypesStillLoads(tmp_path):
     path = tmp_path / "deck.json"
-    path.write_text('[{"word": "cat", "definitions": null, "examples": null, "correctCount": "2"}]', encoding="utf-8")
+    path.write_text(
+        '[{"word": "cat", "definitions": null, "examples": null, "correctCount": "2"}]',
+        encoding="utf-8",
+    )
 
     cards = cardDeck.loadDeck(str(path))
 
@@ -276,15 +303,15 @@ def test_a_hand_edited_deck_with_wrong_types_still_loads(tmp_path):
     assert cards[0].correctCount == 2
 
 
-def test_save_over_a_deck_that_became_unreadable_keeps_the_session(tmp_path):
+def testSaveOverADeckThatBecameUnreadableKeepsTheSession(tmp_path):
     path = str(tmp_path / "deck.json")
     cardDeck.saveDeck([makeCard("cat")], path)
-    cards = cardDeck.loadDeck(path)    # the program knows the deck
+    cards = cardDeck.loadDeck(path)  # the program knows the deck
 
     with open(path, "w", encoding="utf-8") as deckFile:
-        deckFile.write('["cat"]')      # another editor damaged the file
+        deckFile.write('["cat"]')  # another editor damaged the file
 
-    cardDeck.saveDeck(cards + [makeCard("dog")], path)    # must not raise
+    cardDeck.saveDeck(cards + [makeCard("dog")], path)  # must not raise
 
     assert [eachCard.word for eachCard in cardDeck.loadDeck(path)] == ["cat", "dog"]
     assert os.path.exists(path + ".damaged")

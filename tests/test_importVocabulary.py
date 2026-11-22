@@ -8,10 +8,10 @@ from word_flashcard_vocab_learner.flashCard import Card
 
 
 def makePDF(path, pageTexts):
-
     """
-    Write a small but real PDF. Each item of pageTexts is one page; "" makes a page without text
-    (like a scanned page). Each line of a page's text becomes one line in the PDF.
+    Write a small but real PDF. Each item of pageTexts is one page; "" makes a page
+    without text (like a scanned page). Each line of a page's text becomes one line in
+    the PDF.
     """
 
     pageCount = len(pageTexts)
@@ -33,7 +33,9 @@ def makePDF(path, pageTexts):
         if eachText == "":
             stream = ""
         else:
-            lines = " Tj T* ".join(f"({eachLine})" for eachLine in eachText.splitlines())
+            lines = " Tj T* ".join(
+                f"({eachLine})" for eachLine in eachText.splitlines()
+            )
             stream = f"BT /F1 12 Tf 14 TL 72 720 Td {lines} Tj ET"
 
         objects.append(f"<< /Length {len(stream)} >>\nstream\n{stream}\nendstream")
@@ -49,28 +51,35 @@ def makePDF(path, pageTexts):
     output += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode("latin-1")
     for eachOffset in offsets:
         output += f"{eachOffset:010d} 00000 n \n".encode("latin-1")
-    output += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xrefStart}\n%%EOF\n".encode("latin-1")
+    trailer = (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{xrefStart}\n%%EOF\n"
+    )
+    output += trailer.encode("latin-1")
 
     path.write_bytes(output)
 
 
 # ---------- Reading files ----------
 
-def test_clean_path_removes_quotes(tmp_path):
+
+def testCleanPathRemovesQuotes(tmp_path):
     assert importVocabulary.cleanPath(f'  "{tmp_path}"  ') == str(tmp_path)
     assert importVocabulary.cleanPath("'notes.txt'") == "notes.txt"
 
 
-def test_read_text_file_with_byte_order_mark(tmp_path):
+def testReadTextFileWithByteOrderMark(tmp_path):
     path = tmp_path / "words.txt"
     path.write_text("ambiguous\n含糊", encoding="utf-8-sig")
 
     assert importVocabulary.readTextFromFile(str(path)) == "ambiguous\n含糊"
 
 
-def test_read_csv_takes_first_column_even_with_line_breaks_in_cells(tmp_path):
+def testReadCsvTakesFirstColumnEvenWithLineBreaksInCells(tmp_path):
     path = tmp_path / "deck.csv"
-    path.write_text('Word,Definitions\ncat,"1. a pet\n2. a person"\ndog,a pet\n', encoding="utf-8")
+    path.write_text(
+        'Word,Definitions\ncat,"1. a pet\n2. a person"\ndog,a pet\n', encoding="utf-8"
+    )
 
     text = importVocabulary.readTextFromFile(str(path))
 
@@ -78,17 +87,23 @@ def test_read_csv_takes_first_column_even_with_line_breaks_in_cells(tmp_path):
     assert importVocabulary.extractWords(text) == ["cat", "dog"]
 
 
-def test_read_pdf(tmp_path):
+def testReadPdf(tmp_path):
     pytest.importorskip("pypdf")
     path = tmp_path / "notes.pdf"
-    makePDF(path, ["ambiguous - unclear\nreluctant - not willing", "hypothesis - an idea"])
+    makePDF(
+        path, ["ambiguous - unclear\nreluctant - not willing", "hypothesis - an idea"]
+    )
 
     text = importVocabulary.readTextFromFile(str(path))
 
-    assert importVocabulary.extractWords(text) == ["ambiguous", "reluctant", "hypothesis"]
+    assert importVocabulary.extractWords(text) == [
+        "ambiguous",
+        "reluctant",
+        "hypothesis",
+    ]
 
 
-def test_scanned_pdf_needs_ocr(tmp_path, monkeypatch):
+def testScannedPdfNeedsOcr(tmp_path, monkeypatch):
     pytest.importorskip("pypdf")
     path = tmp_path / "scan.pdf"
     makePDF(path, [""])
@@ -98,7 +113,7 @@ def test_scanned_pdf_needs_ocr(tmp_path, monkeypatch):
         importVocabulary.readTextFromFile(str(path))
 
 
-def test_scanned_pdf_pages_are_read_with_ocr(tmp_path, monkeypatch):
+def testScannedPdfPagesAreReadWithOcr(tmp_path, monkeypatch):
     pytest.importorskip("pypdf")
     path = tmp_path / "mixed.pdf"
     makePDF(path, ["ambiguous - unclear", ""])
@@ -111,7 +126,9 @@ def test_scanned_pdf_pages_are_read_with_ocr(tmp_path, monkeypatch):
 
     monkeypatch.setattr(importVocabulary, "isOCRAvailable", lambda: True)
     monkeypatch.setattr(importVocabulary, "renderPDFPages", fakeRender)
-    monkeypatch.setattr(importVocabulary, "runOCR", lambda image: "reluctant - not willing")
+    monkeypatch.setattr(
+        importVocabulary, "runOCR", lambda image: "reluctant - not willing"
+    )
 
     text = importVocabulary.readTextFromFile(str(path))
 
@@ -119,7 +136,7 @@ def test_scanned_pdf_pages_are_read_with_ocr(tmp_path, monkeypatch):
     assert importVocabulary.extractWords(text) == ["ambiguous", "reluctant"]
 
 
-def test_read_word_document_paragraphs_and_tables(tmp_path):
+def testReadWordDocumentParagraphsAndTables(tmp_path):
     docx = pytest.importorskip("docx")
     path = tmp_path / "words.docx"
 
@@ -135,16 +152,18 @@ def test_read_word_document_paragraphs_and_tables(tmp_path):
     assert importVocabulary.extractWords(text) == ["ambiguous", "reluctant"]
 
 
-def test_read_image_uses_ocr(tmp_path, monkeypatch):
+def testReadImageUsesOcr(tmp_path, monkeypatch):
     image = pytest.importorskip("PIL.Image")
     path = tmp_path / "scan.png"
     image.new("RGB", (20, 20), "white").save(path)
-    monkeypatch.setattr(importVocabulary, "runOCR", lambda picture: "ambiguous\nreluctant")
+    monkeypatch.setattr(
+        importVocabulary, "runOCR", lambda picture: "ambiguous\nreluctant"
+    )
 
     assert importVocabulary.readTextFromFile(str(path)) == "ambiguous\nreluctant"
 
 
-def test_missing_and_unsupported_files(tmp_path):
+def testMissingAndUnsupportedFiles(tmp_path):
     with pytest.raises(importVocabulary.FileImportError, match="not found"):
         importVocabulary.readTextFromFile(str(tmp_path / "nothing.pdf"))
 
@@ -155,17 +174,22 @@ def test_missing_and_unsupported_files(tmp_path):
 
     music = tmp_path / "song.mp3"
     music.write_bytes(b"x")
-    with pytest.raises(importVocabulary.FileImportError, match="Unsupported file type '.mp3'"):
+    with pytest.raises(
+        importVocabulary.FileImportError, match="Unsupported file type '.mp3'"
+    ):
         importVocabulary.readTextFromFile(str(music))
 
 
-@pytest.mark.skipif(importlib.util.find_spec("pytesseract") is not None, reason="pytesseract is installed")
-def test_ocr_without_pytesseract_gives_install_hint():
+@pytest.mark.skipif(
+    importlib.util.find_spec("pytesseract") is not None,
+    reason="pytesseract is installed",
+)
+def testOcrWithoutPytesseractGivesInstallHint():
     with pytest.raises(importVocabulary.FileImportError, match="ocr"):
         importVocabulary.runOCR(None)
 
 
-def test_find_tesseract_uses_setting(tmp_path, monkeypatch):
+def testFindTesseractUsesSetting(tmp_path, monkeypatch):
     program = tmp_path / "tesseract.exe"
     program.write_bytes(b"")
     monkeypatch.setenv("TESSERACT_CMD", str(program))
@@ -174,6 +198,7 @@ def test_find_tesseract_uses_setting(tmp_path, monkeypatch):
 
 
 # ---------- Finding words ----------
+
 
 @pytest.mark.parametrize(
     "line, expected",
@@ -190,11 +215,11 @@ def test_find_tesseract_uses_setting(tmp_path, monkeypatch):
         ("", None),
     ],
 )
-def test_word_from_list_line(line, expected):
+def testWordFromListLine(line, expected):
     assert importVocabulary.wordFromListLine(line) == expected
 
 
-def test_word_list_skips_heading_lines():
+def testWordListSkipsHeadingLines():
     text = "Unit 3 vocabulary\nWord list\nWord\nunit - 單元\nreluctant - not willing\n"
     assert importVocabulary.extractWords(text) == ["unit", "reluctant"]
 
@@ -212,16 +237,21 @@ def test_word_list_skips_heading_lines():
         ("research", False),
     ],
 )
-def test_is_common_word(word, expected):
+def testIsCommonWord(word, expected):
     assert importVocabulary.isCommonWord(word) is expected
 
 
-def test_word_list_is_detected():
+def testWordListIsDetected():
     assert importVocabulary.looksLikeWordList("cat\ndog - 狗\n3. bird\n") is True
-    assert importVocabulary.looksLikeWordList("This is a long sentence about many things.\nAnd another long one here.") is False
+    assert (
+        importVocabulary.looksLikeWordList(
+            "This is a long sentence about many things.\nAnd another long one here."
+        )
+        is False
+    )
 
 
-def test_markdown_front_matter_and_links_do_not_hide_the_words():
+def testMarkdownFrontMatterAndLinksDoNotHideTheWords():
     text = (
         "---\n"
         "title: test\n"
@@ -232,10 +262,15 @@ def test_markdown_front_matter_and_links_do_not_hide_the_words():
     )
 
     assert importVocabulary.looksLikeWordList(text) is False
-    assert importVocabulary.extractWords(text) == ["visit", "seminar", "discussed", "sustainability"]
+    assert importVocabulary.extractWords(text) == [
+        "visit",
+        "seminar",
+        "discussed",
+        "sustainability",
+    ]
 
 
-def test_note_lines_are_prose_not_a_word_list():
+def testNoteLinesAreProseNotAWordList():
     text = (
         "Note: the seminar discussed sustainability.\n"
         "Example: biodiversity matters.\n"
@@ -243,29 +278,53 @@ def test_note_lines_are_prose_not_a_word_list():
     )
 
     assert importVocabulary.looksLikeWordList(text) is False
-    assert importVocabulary.extractWords(text) == ["seminar", "discussed", "sustainability", "biodiversity", "matters", "deforestation"]
+    assert importVocabulary.extractWords(text) == [
+        "seminar",
+        "discussed",
+        "sustainability",
+        "biodiversity",
+        "matters",
+        "deforestation",
+    ]
 
 
-def test_links_and_emails_leave_no_word_fragments():
-    text = "Visit https://example.com today.\nRead www.test.org daily.\nEmail me at a@b.com please.\n"
+def testLinksAndEmailsLeaveNoWordFragments():
+    text = (
+        "Visit https://example.com today.\n"
+        "Read www.test.org daily.\n"
+        "Email me at a@b.com please.\n"
+    )
 
     assert importVocabulary.extractWords(text) == ["visit", "daily", "email"]
 
 
-def test_short_words_come_from_a_passage():
-    assert importVocabulary.extractWords("The cat sat on the mat with a dog.") == ["cat", "sat", "mat", "dog"]
+def testShortWordsComeFromAPassage():
+    assert importVocabulary.extractWords("The cat sat on the mat with a dog.") == [
+        "cat",
+        "sat",
+        "mat",
+        "dog",
+    ]
 
 
-def test_contractions_do_not_leave_word_stems():
-    assert importVocabulary.extractWords("I couldn't visit the museum; she isn't well.") == ["visit", "museum"]
+def testContractionsDoNotLeaveWordStems():
+    assert importVocabulary.extractWords(
+        "I couldn't visit the museum; she isn't well."
+    ) == ["visit", "museum"]
 
 
-def test_word_list_with_meanings_is_still_a_list():
-    assert importVocabulary.extractWords("cat - 狗\nmat - 垫子\n3. dog\n") == ["cat", "mat", "dog"]
+def testWordListWithMeaningsIsStillAList():
+    assert importVocabulary.extractWords("cat - 狗\nmat - 垫子\n3. dog\n") == [
+        "cat",
+        "mat",
+        "dog",
+    ]
 
 
-def test_clean_text_removes_front_matter_links_and_emails():
-    text = "\ufeff---\ntitle: test\n---\n\nSee https://example.com or mail me at a@b.com\n"
+def testCleanTextRemovesFrontMatterLinksAndEmails():
+    text = (
+        "\ufeff---\ntitle: test\n---\n\nSee https://example.com or mail me at a@b.com\n"
+    )
 
     cleaned = importVocabulary.cleanText(text)
 
@@ -275,24 +334,37 @@ def test_clean_text_removes_front_matter_links_and_emails():
     assert "See" in cleaned
 
 
-def test_words_from_passage_skips_common_words_and_names():
+def testWordsFromPassageSkipsCommonWordsAndNames():
     text = (
         "Scientists were reluctant to accept the hypothesis.\n"
-        "Mary said the results were ambiguous, but other scientists disagreed with Mary."
+        "Mary said the results were ambiguous, "
+        "but other scientists disagreed with Mary."
     )
 
-    assert importVocabulary.extractWords(text) == ["scientists", "reluctant", "accept", "hypothesis", "results", "ambiguous", "disagreed"]
+    assert importVocabulary.extractWords(text) == [
+        "scientists",
+        "reluctant",
+        "accept",
+        "hypothesis",
+        "results",
+        "ambiguous",
+        "disagreed",
+    ]
 
 
-def test_words_from_passage_joins_words_split_across_lines():
-    assert "vocabulary" in importVocabulary.wordsFromPassage("You need a large vocab-\nulary to read this book quickly.")
+def testWordsFromPassageJoinsWordsSplitAcrossLines():
+    assert "vocabulary" in importVocabulary.wordsFromPassage(
+        "You need a large vocab-\nulary to read this book quickly."
+    )
 
 
-def test_remove_plurals():
-    assert importVocabulary.removePlurals(["cat", "cats", "story", "stories", "box", "boxes", "news"]) == ["cat", "story", "box", "news"]
+def testRemovePlurals():
+    assert importVocabulary.removePlurals(
+        ["cat", "cats", "story", "stories", "box", "boxes", "news"]
+    ) == ["cat", "story", "box", "news"]
 
 
-def test_remove_known_words():
+def testRemoveKnownWords():
     cards = [Card("Cat", ["a pet"])]
     assert importVocabulary.removeKnownWords(["cat", "dog"], cards) == ["dog"]
 
@@ -312,17 +384,22 @@ def test_remove_known_words():
         ("abc", None),
     ],
 )
-def test_parse_selection(answer, expected):
+def testParseSelection(answer, expected):
     assert importVocabulary.parseSelection(answer, 5) == expected
 
 
 # ---------- Adding words ----------
 
-def test_add_words_skips_unknown_and_duplicate_words(monkeypatch, tmp_path, capsys):
+
+def testAddWordsSkipsUnknownAndDuplicateWords(monkeypatch, tmp_path, capsys):
     def fakeGetWordDefinition(word):
         if word == "qwzx":
             return {"word": word, "definitions": [], "examples": []}
-        return {"word": word.lower(), "definitions": [f"meaning of {word}"], "examples": [[]]}
+        return {
+            "word": word.lower(),
+            "definitions": [f"meaning of {word}"],
+            "examples": [[]],
+        }
 
     monkeypatch.setattr(dictionary, "getWordDefinition", fakeGetWordDefinition)
     cards = [Card("cat", ["a pet"])]
@@ -333,14 +410,23 @@ def test_add_words_skips_unknown_and_duplicate_words(monkeypatch, tmp_path, caps
     out = capsys.readouterr().out
     assert summary == {"added": 1, "skipped": 2}
     assert "not found in the dictionary" in out
-    assert 'already in your deck' in out
-    assert [eachCard.word for eachCard in cardDeck.loadDeck(path)] == ["cat", "ambiguous"]
+    assert "already in your deck" in out
+    assert [eachCard.word for eachCard in cardDeck.loadDeck(path)] == [
+        "cat",
+        "ambiguous",
+    ]
 
 
-def test_create_card_adds_translation_when_ai_is_set_up(monkeypatch):
+def testCreateCardAddsTranslationWhenAiIsSetUp(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "test")
-    monkeypatch.setattr(dictionary, "getWordDefinition", lambda word: {"word": word, "definitions": ["unclear"], "examples": [[]]})
-    monkeypatch.setattr(genAITutor, "translateWord", lambda word, definition: "含糊不清")
+    monkeypatch.setattr(
+        dictionary,
+        "getWordDefinition",
+        lambda word: {"word": word, "definitions": ["unclear"], "examples": [[]]},
+    )
+    monkeypatch.setattr(
+        genAITutor, "translateWord", lambda word, definition: "含糊不清"
+    )
 
     card, reason = importVocabulary.createCard("ambiguous")
 
@@ -348,17 +434,26 @@ def test_create_card_adds_translation_when_ai_is_set_up(monkeypatch):
     assert card.translation == "含糊不清"
 
 
-def test_run_import_lets_ai_pick_words_from_a_passage(monkeypatch, tmp_path, typeAnswers, capsys):
+def testRunImportLetsAiPickWordsFromAPassage(
+    monkeypatch, tmp_path, typeAnswers, capsys
+):
     passage = tmp_path / "article.txt"
     passage.write_text(
-        "The ending of the story was ambiguous, and many readers were reluctant to guess what happened next.",
+        "The ending of the story was ambiguous, and many readers were reluctant "
+        "to guess what happened next.",
         encoding="utf-8",
     )
 
     monkeypatch.setenv("LLM_API_KEY", "test")
-    monkeypatch.setattr(genAITutor, "pickVocabulary", lambda text: ["ambiguous", "reluctant"])
+    monkeypatch.setattr(
+        genAITutor, "pickVocabulary", lambda text: ["ambiguous", "reluctant"]
+    )
     monkeypatch.setattr(genAITutor, "translateWord", lambda word, definition: "")
-    monkeypatch.setattr(dictionary, "getWordDefinition", lambda word: {"word": word, "definitions": ["x"], "examples": [[]]})
+    monkeypatch.setattr(
+        dictionary,
+        "getWordDefinition",
+        lambda word: {"word": word, "definitions": ["x"], "examples": [[]]},
+    )
 
     cards = []
     typeAnswers([str(passage), "y", "2"])
@@ -369,7 +464,7 @@ def test_run_import_lets_ai_pick_words_from_a_passage(monkeypatch, tmp_path, typ
     assert "Added 1, skipped 0." in capsys.readouterr().out
 
 
-def test_run_import_reports_file_errors(tmp_path, typeAnswers, capsys):
+def testRunImportReportsFileErrors(tmp_path, typeAnswers, capsys):
     typeAnswers([str(tmp_path / "missing.pdf")])
 
     importVocabulary.importVocabulary([], str(tmp_path / "deck.json"))
@@ -377,22 +472,28 @@ def test_run_import_reports_file_errors(tmp_path, typeAnswers, capsys):
     assert "File not found" in capsys.readouterr().out
 
 
-def test_run_import_when_all_words_are_known(tmp_path, typeAnswers, capsys):
+def testRunImportWhenAllWordsAreKnown(tmp_path, typeAnswers, capsys):
     wordList = tmp_path / "words.txt"
     wordList.write_text("cat\n", encoding="utf-8")
     typeAnswers([str(wordList)])
 
-    importVocabulary.importVocabulary([Card("cat", ["a pet"])], str(tmp_path / "deck.json"))
+    importVocabulary.importVocabulary(
+        [Card("cat", ["a pet"])], str(tmp_path / "deck.json")
+    )
 
     assert "already in your deck" in capsys.readouterr().out
 
 
-def test_read_csv_translations_uses_the_chinese_column(tmp_path):
+def testReadCsvTranslationsUsesTheChineseColumn(tmp_path):
     from word_flashcard_vocab_learner import exportDeckToCSV
 
     path = tmp_path / "deck.csv"
     exportDeckToCSV.exportDeckToCSV(
-        [Card("cat", ["a pet"], [["My cat is asleep."]], "貓", nextReview="2026-12-01")],
+        [
+            Card(
+                "cat", ["a pet"], [["My cat is asleep."]], "貓", nextReview="2026-12-01"
+            )
+        ],
         str(path),
     )
 
@@ -401,14 +502,16 @@ def test_read_csv_translations_uses_the_chinese_column(tmp_path):
     assert translations == {"cat": "貓"}
 
 
-def test_read_csv_translations_without_a_translation_column(tmp_path):
+def testReadCsvTranslationsWithoutATranslationColumn(tmp_path):
     path = tmp_path / "words.csv"
     path.write_text("Word\ncat\ndog\n", encoding="utf-8")
 
     assert importVocabulary.readCSVTranslations(str(path), ",") == {}
 
 
-def test_import_fills_the_chinese_column_from_the_users_csv(tmp_path, typeAnswers, capsys, monkeypatch):
+def testImportFillsTheChineseColumnFromTheUsersCsv(
+    tmp_path, typeAnswers, capsys, monkeypatch
+):
     from word_flashcard_vocab_learner import exportDeckToCSV
 
     csvPath = tmp_path / "my-words.csv"
@@ -416,7 +519,11 @@ def test_import_fills_the_chinese_column_from_the_users_csv(tmp_path, typeAnswer
         [Card("cat", ["a pet"], [["My cat is asleep."]], "貓")],
         str(csvPath),
     )
-    monkeypatch.setattr(dictionary, "getWordDefinition", lambda word: {"word": word, "definitions": ["a pet"], "examples": [[]]})
+    monkeypatch.setattr(
+        dictionary,
+        "getWordDefinition",
+        lambda word: {"word": word, "definitions": ["a pet"], "examples": [[]]},
+    )
 
     cards = []
     typeAnswers([str(csvPath), "y", ""])
@@ -428,14 +535,17 @@ def test_import_fills_the_chinese_column_from_the_users_csv(tmp_path, typeAnswer
     assert cards[0].translation == "貓"
 
 
-def test_read_csv_translations_without_a_header_row(tmp_path):
+def testReadCsvTranslationsWithoutAHeaderRow(tmp_path):
     path = tmp_path / "words.csv"
     path.write_text("cat,貓\ndog,狗\n", encoding="utf-8")
 
-    assert importVocabulary.readCSVTranslations(str(path), ",") == {"cat": "貓", "dog": "狗"}
+    assert importVocabulary.readCSVTranslations(str(path), ",") == {
+        "cat": "貓",
+        "dog": "狗",
+    }
 
 
-def test_read_csv_translations_ignores_an_english_second_column(tmp_path):
+def testReadCsvTranslationsIgnoresAnEnglishSecondColumn(tmp_path):
     path = tmp_path / "words.csv"
     path.write_text("cat,a small pet\ndog,a pet that barks\n", encoding="utf-8")
 

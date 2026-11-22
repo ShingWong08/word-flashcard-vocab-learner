@@ -2,7 +2,6 @@ from datetime import date
 
 from word_flashcard_vocab_learner.flashCard import Card
 
-
 LOOKUP = {
     "word": "ambiguous",
     "definitions": ["open to more than one meaning", "uncertain"],
@@ -10,7 +9,7 @@ LOOKUP = {
 }
 
 
-def test_from_lookup_starts_in_box_one_and_due_today():
+def testFromLookupStartsInBoxOneAndDueToday():
     card = Card.fromLookup(LOOKUP, translation="含糊不清")
 
     assert card.word == "ambiguous"
@@ -22,39 +21,53 @@ def test_from_lookup_starts_in_box_one_and_due_today():
     assert card.timesReviewed() == 0
 
 
-def test_from_lookup_copies_lists():
+def testFromLookupCopiesLists():
     card = Card.fromLookup(LOOKUP)
     card.examples[0].append("changed")
 
     assert LOOKUP["examples"][0] == ["The ending is ambiguous."]
 
 
-def test_to_dict_and_from_dict_round_trip():
-    card = Card("cat", ["a small animal"], [["The cat sat."]], "貓", 3, "2026-12-01", 4, 1, "2026-11-01")
+def testToDictAndFromDictRoundTrip():
+    card = Card(
+        "cat",
+        ["a small animal"],
+        [["The cat sat."]],
+        "貓",
+        3,
+        "2026-12-01",
+        4,
+        1,
+        "2026-11-01",
+    )
 
     assert Card.fromDict(card.toDict()) == card
 
 
-def test_from_dict_ignores_unknown_keys_and_fills_defaults():
-    card = Card.fromDict({"word": "cat", "definitions": ["a pet"], "someFutureField": 1})
+def testFromDictIgnoresUnknownKeysAndFillsDefaults():
+    card = Card.fromDict(
+        {"word": "cat", "definitions": ["a pet"], "someFutureField": 1}
+    )
 
     assert card.word == "cat"
     assert card.examples == []
     assert card.box == 1
 
 
-def test_from_dict_repairs_missing_or_wrong_values():
-    card = Card.fromDict({
-        "word": "  cat  ",
-        "definitions": None,
-        "examples": None,
-        "translation": 5,
-        "box": None,
-        "nextReview": "not a date",
-        "correctCount": "2",
-        "wrongCount": None,
-        "addedOn": None,
-    })
+def testFromDictRepairsMissingOrWrongValues():
+    card = Card.fromDict(
+        {
+            "word": "  cat  ",
+            "definitions": None,
+            "examples": None,
+            "translation": 5,
+            "box": None,
+            "nextReview": "not a date",
+            "correctCount": "2",
+            "wrongCount": None,
+            "addedOn": None,
+        }
+    )
 
     assert card.word == "cat"
     assert card.definitions == []
@@ -67,12 +80,12 @@ def test_from_dict_repairs_missing_or_wrong_values():
     assert card.addedOn == date.today().isoformat()
 
 
-def test_from_dict_keeps_the_box_inside_one_to_five():
+def testFromDictKeepsTheBoxInsideOneToFive():
     assert Card.fromDict({"word": "cat", "definitions": [], "box": 0}).box == 1
     assert Card.fromDict({"word": "cat", "definitions": [], "box": 9}).box == 5
 
 
-def test_from_dict_needs_a_word():
+def testFromDictNeedsAWord():
     import pytest
 
     with pytest.raises(ValueError, match="no word"):

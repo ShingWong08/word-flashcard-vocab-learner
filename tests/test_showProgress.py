@@ -3,12 +3,18 @@ from datetime import date
 from word_flashcard_vocab_learner import showProgress
 from word_flashcard_vocab_learner.flashCard import Card
 
-
 TODAY = date(2026, 11, 18)
 
 
 def makeCard(word, box=1, nextReview="2026-11-18", correct=0, wrong=0):
-    return Card(word, ["x"], box=box, nextReview=nextReview, correctCount=correct, wrongCount=wrong)
+    return Card(
+        word,
+        ["x"],
+        box=box,
+        nextReview=nextReview,
+        correctCount=correct,
+        wrongCount=wrong,
+    )
 
 
 CARDS = [
@@ -19,7 +25,7 @@ CARDS = [
 ]
 
 
-def test_calculate_stats():
+def testCalculateStats():
     stats = showProgress.calculateStats(CARDS, TODAY)
 
     assert stats["words"] == 4
@@ -31,17 +37,20 @@ def test_calculate_stats():
     assert stats["boxes"] == {1: 2, 2: 1, 3: 0, 4: 0, 5: 1}
 
 
-def test_format_bar():
+def testFormatBar():
     assert showProgress.formatBar(0, 10) == ""
     assert showProgress.formatBar(10, 10) == "█" * showProgress.MAX_BAR_LENGTH
     assert showProgress.formatBar(1, 1000) == "█"
 
 
-def test_hardest_words():
-    assert [eachCard.word for eachCard in showProgress.hardestWords(CARDS)] == ["cat", "dog"]
+def testHardestWords():
+    assert [eachCard.word for eachCard in showProgress.hardestWords(CARDS)] == [
+        "cat",
+        "dog",
+    ]
 
 
-def test_show_progress(capsys):
+def testShowProgress(capsys):
     showProgress.showProgress(CARDS, TODAY)
 
     out = capsys.readouterr().out
@@ -51,6 +60,6 @@ def test_show_progress(capsys):
     assert "Words to practise more" in out
 
 
-def test_show_progress_with_empty_deck(capsys):
+def testShowProgressWithEmptyDeck(capsys):
     showProgress.showProgress([], TODAY)
     assert "Your deck is empty" in capsys.readouterr().out
