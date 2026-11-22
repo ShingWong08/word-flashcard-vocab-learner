@@ -64,7 +64,7 @@ def textToSpeech(
 
     client = ElevenLabs(api_key=apiKey)
 
-    print(ChatColor.paint(f"The audio of '{text}' is generating...", ChatColor.BLUE))
+    print(ChatColor.paint(f"The audio is generating...", ChatColor.BLUE))
 
     audioStream = client.text_to_speech.convert(
         text=text,
@@ -85,7 +85,7 @@ def textToSpeech(
         for eachChunk in audioStream:
             audioFile.write(eachChunk)
 
-    print(ChatColor.paint(f"Audio saved successfully to {filePath}.", ChatColor.GREEN))
+    print(ChatColor.paint(f"Audio saved successfully.", ChatColor.GREEN))
 
     if autoPlay:
         with open(filePath, "rb") as audioFile:
