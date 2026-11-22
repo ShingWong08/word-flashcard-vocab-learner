@@ -14,10 +14,16 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 
-# version 和 description 由 flit 從 __init__.py 的 __version__ 和 docstring 讀取
+# The version number and the one-line description are not written in this file.
+# When the package is built, flit reads them from
+# src/word_flashcard_vocab_learner/__init__.py: the version from the __version__
+# variable, and the description from the docstring at the top of that file.
+# To release a new version, change __version__ there, not here.
 dynamic = ["version", "description"]
 
-# 程式碼使用了 `str | None` 寫法，最低需要 Python 3.10
+# The code writes optional types as `str | None` (PEP 604). Python evaluates these type
+# hints when a module is imported, and the `X | None` syntax only works from Python
+# 3.10, so older versions cannot run the app.
 requires-python = ">=3.10"
 keywords = ["flashcard", "vocabulary", "english-learning", "education", "cli"]
 classifiers = [
@@ -34,32 +40,60 @@ classifiers = [
     "Topic :: Education",
 ]
 
+# Packages that are always installed with the app (pip install .). They are enough to
+# look up words, keep the deck and review in Meaning and Spelling modes.
 dependencies = [
-    "requests",        # connectFreeDictionaryAPI、connectGenAIRequest
-    "openai",          # connectGenAI
-    "python-dotenv",   # 從 .env 讀取 API key
+    # HTTP requests: the dictionary lookups in connectFreeDictionaryAPI, and the
+    # requests-based LLM client in connectGenAIRequest.
+    "requests",
+    # The OpenAI client that connectGenAI uses for the AI tutor (Chinese translations,
+    # sentence feedback, picking words from a passage). It works with any
+    # OpenAI-compatible API, such as the NVIDIA endpoint the code uses by default.
+    "openai",
+    # Reads the API keys and settings (LLM_API_KEY, ELEVENLABS_API_KEY, TESSERACT_CMD,
+    # WORD_FLASHCARD_DECK) from the .env file, so they do not have to be set in the
+    # shell every time.
+    "python-dotenv",
 ]
 
+# Optional features, installed only when asked for. Install one group with
+# pip install ".[speech]", or several at once with pip install ".[speech,documents]".
 [project.optional-dependencies]
-# 語音功能（ElevenLabs 語音轉文字 / 文字轉語音）
-# 錄音需要 PortAudio 系統庫；自動播放音頻需要安裝 ffmpeg（ffplay）
+# Speech: pronunciation and the Listening and Speaking review modes, using ElevenLabs
+# text-to-speech and speech-to-text. Also needs ELEVENLABS_API_KEY in .env.
+#   - elevenlabs:  the ElevenLabs API client.
+#   - sounddevice: records from the microphone. Needs the PortAudio system library.
+#   - soundfile:   saves the recording as a WAV file before it is transcribed.
+#   - pyperclip:   copies a transcription to the clipboard, so it can be edited.
+# Playing audio also needs ffmpeg installed, with its ffplay program on PATH.
 speech = [
     "elevenlabs",
     "sounddevice",
     "soundfile",
     "pyperclip",
 ]
-# 從 PDF 和 Word（.docx）文件導入生字
+# Documents: import vocabulary from PDF and Word files.
+#   - pypdf:       reads the text of every page of a PDF file.
+#   - python-docx: reads the paragraphs and tables of a Word (.docx) file.
+# Old Word .doc files are not supported; save them as .docx first.
 documents = [
     "pypdf",
     "python-docx",
 ]
-# 從相片 / 掃描文件導入生字（OCR）；需要另外安裝 Tesseract OCR 程式
+# OCR (optical character recognition): import vocabulary from photos, scans and
+# scanned PDF pages that contain pictures of text instead of real text.
+#   - pytesseract: runs the Tesseract OCR program from Python.
+#   - Pillow:      opens the image files.
+#   - pypdfium2:   turns scanned PDF pages into images, so OCR can read them.
+# Tesseract itself is a separate program that has to be installed as well. If it is
+# not on PATH, set TESSERACT_CMD in .env to the full path of tesseract.exe.
 ocr = [
     "pytesseract",
     "Pillow",
     "pypdfium2",
 ]
+# Development: pytest runs the tests in the tests/ folder (pip install ".[dev]", then
+# run pytest in the project folder).
 dev = [
     "pytest",
 ]
@@ -72,11 +106,16 @@ Home = "https://github.com/ShingWong08/word-flashcard-vocab-learner"
 Repository = "https://github.com/ShingWong08/word-flashcard-vocab-learner"
 Issues = "https://github.com/ShingWong08/word-flashcard-vocab-learner/issues"
 
+# pytest settings: look for tests only in tests/, and add src/ to the import path, so
+# the tests always run against the source code in this folder, even when the package
+# is not installed.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
 
-# 代碼格式：Black（PEP 8），每行最多 88 個字元，保持 Python 3.10 語法
+# Code formatting with Black, which follows PEP 8: lines are at most 88 characters long,
+# and only syntax that Python 3.10 understands is used, so the code keeps working on
+# every Python version this package supports. Format the code with: black src tests
 [tool.black]
 line-length = 88
 target-version = ["py310"]

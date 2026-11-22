@@ -39,7 +39,19 @@ def selectByNumbers(
 ) -> tuple[list[Card], list[str]]:
     """
     Turn numbers and ranges such as "1 3 5-8" into cards.
-    Returns (cards, problems).
+    A range may be written backwards ("8-5") or with spaces ("5 - 8").
+
+    Parameters:
+        Mandatory:
+            - part (str): One comma-separated part of the answer, holding only numbers,
+              spaces and dashes.
+            - numberedCards (list[Card]): The cards in the order they are numbered on
+              screen (number 1 is the first card).
+    Returns:
+        tuple[list[Card], list[str]]: (cards, problems).
+            - cards: The cards for the numbers, in the order typed (may repeat).
+            - problems: A message for every item that is not a number or a range, or
+              that is outside 1 to the number of cards.
     """
 
     selected = []
@@ -71,7 +83,17 @@ def selectByPattern(
 ) -> tuple[list[Card], list[str]]:
     """
     Select the words that match a pattern with * (any letters) or ? (one letter), e.g.
-    "amb*".
+    "amb*" or "?at".
+
+    Parameters:
+        Mandatory:
+            - pattern (str): The pattern, compared with the whole word and ignoring
+              upper / lower case.
+            - numberedCards (list[Card]): The cards in the order they are numbered on
+              screen.
+    Returns:
+        tuple[list[Card], list[str]]: (cards, problems): the matching cards in list
+        order and no problems, or no cards and the message 'No words match "...".'
     """
 
     target = pattern.casefold()
@@ -90,8 +112,17 @@ def selectByPattern(
 def selectByWord(word: str, numberedCards: list[Card]) -> tuple[list[Card], list[str]]:
     """
     Select a word or phrase. If "cat dog" is not a phrase in the deck but "cat" and
-    "dog" both are,
-    both are selected (so commas are not strictly needed).
+    "dog" both are, both are selected (so commas are not strictly needed).
+
+    Parameters:
+        Mandatory:
+            - word (str): The word or phrase, compared ignoring upper / lower case.
+            - numberedCards (list[Card]): The cards in the order they are numbered on
+              screen.
+    Returns:
+        tuple[list[Card], list[str]]: (cards, problems): the card(s) and no problems,
+        or no cards and the message '"..." is not in your deck.' when the phrase is not
+        in the deck and its words are not all in the deck either.
     """
 
     card = cardDeck.findCard(numberedCards, word)
@@ -110,6 +141,20 @@ def selectByWord(word: str, numberedCards: list[Card]) -> tuple[list[Card], list
 
 
 def selectByBox(box: int, numberedCards: list[Card]) -> tuple[list[Card], list[str]]:
+    """
+    Select every card in one Leitner box, e.g. for "box 1" or "mastered" (box 5).
+
+    Parameters:
+        Mandatory:
+            - box (int): The box number. A box outside 1-5 is a problem, not an error.
+            - numberedCards (list[Card]): The cards in the order they are numbered on
+              screen.
+    Returns:
+        tuple[list[Card], list[str]]: (cards, problems): the cards in that box in list
+        order and no problems, or no cards and a message saying that the box does not
+        exist or is empty.
+    """
+
     minBox = leitnerScheduler.MIN_BOX
     maxBox = leitnerScheduler.MAX_BOX
 
@@ -180,6 +225,16 @@ def selectCards(answer: str, numberedCards: list[Card]) -> tuple[list[Card], lis
 def removeDuplicates(selected: list[Card], numberedCards: list[Card]) -> list[Card]:
     """
     Keep each card once, in the same order as the numbered list.
+    Cards are compared as objects, so two cards with the same word stay separate.
+
+    Parameters:
+        Mandatory:
+            - selected (list[Card]): The chosen cards, in any order and possibly with
+              repeats (e.g. from "cat, 1" when card 1 is "cat").
+            - numberedCards (list[Card]): The cards in the order they are numbered on
+              screen.
+    Returns:
+        list[Card]: Each chosen card once, in numbered-list order.
     """
 
     selectedIds = {id(eachCard) for eachCard in selected}
@@ -192,7 +247,16 @@ def removeDuplicates(selected: list[Card], numberedCards: list[Card]) -> list[Ca
 def removeCards(cards: list[Card], selected: list[Card], deckPath: str) -> None:
     """
     Remove the selected cards and save the deck. A backup of the old deck is saved
-    first.
+    first (see cardDeck.backupDeck).
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck. It is changed in place.
+            - selected (list[Card]): The card objects to remove.
+            - deckPath (str): The deck file.
+    Raises:
+        cardDeck.DeckSaveError: When the deck file cannot be written. The cards are
+        already removed from the list in memory by then.
     """
 
     cardDeck.backupDeck(deckPath)
@@ -208,7 +272,18 @@ def undoRemoval(
 ) -> list[Card]:
     """
     Put removed cards back (with their boxes, dates and scores). Words that were added
-    again in the meantime are skipped. Returns the cards that were put back.
+    again in the meantime are skipped. The deck is saved afterwards.
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck. It is changed in place.
+            - removedCards (list[Card]): The cards of one earlier removal.
+            - deckPath (str): The deck file.
+    Returns:
+        list[Card]: The cards that were put back.
+    Raises:
+        cardDeck.DeckSaveError: When the deck file cannot be written. The cards are
+        already back in the list in memory by then.
     """
 
     restored = []
@@ -226,6 +301,18 @@ def undoRemoval(
 
 
 def formatWordList(words: list[str], indent: str = "    ") -> str:
+    """
+    Show words as one comma-separated list in violet, wrapped to the screen width.
+
+    Parameters:
+        Mandatory:
+            - words (list[str]): The words, e.g. the ones about to be removed.
+        Optional:
+            - indent (str): Text before every line. Default: "    " (four spaces).
+    Returns:
+        str: The wrapped list.
+    """
+
     return terminalDisplay.wrapParagraph(
         ", ".join(words), indent, textStyles=(ChatColor.VIOLET,)
     )
@@ -234,6 +321,13 @@ def formatWordList(words: list[str], indent: str = "    ") -> str:
 def printNumberedList(numberedCards: list[Card]) -> None:
     """
     Print the words in numbered columns, then how many cards are in each box.
+    The numbers are the ones the user types to remove words, and the same as on the
+    "View my deck" screen.
+
+    Parameters:
+        Mandatory:
+            - numberedCards (list[Card]): The cards, already in numbered (alphabetical)
+              order. Long words are shortened with "…" so the columns line up.
     """
 
     numberWidth = len(str(len(numberedCards)))
@@ -282,6 +376,15 @@ def confirmRemoval(selected: list[Card], isEverything: bool) -> bool:
     Show the words that will be removed and ask the user to confirm.
     Removing every word needs the user to type "delete all", so it cannot happen by
     accident.
+
+    Parameters:
+        Mandatory:
+            - selected (list[Card]): The cards about to be removed.
+            - isEverything (bool): True when the removal would empty a deck of more
+              than one word; then "delete all" has to be typed instead of y.
+    Returns:
+        bool: True if the user confirmed. False for no, Enter, a wrong confirmation
+        text, or stopping (q, Ctrl+C or Ctrl+Z / Ctrl+D).
     """
 
     isOne = len(selected) == 1
@@ -310,6 +413,11 @@ def confirmRemoval(selected: list[Card], isEverything: bool) -> bool:
 def printUpdatedList(cards: list[Card]) -> None:
     """
     After a removal or undo the numbers change, so show the new list straight away.
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck after the change. Nothing is listed when it
+              is empty.
     """
 
     print()
@@ -325,8 +433,14 @@ def printUpdatedList(cards: list[Card]) -> None:
 def removeWords(cards: list[Card], deckPath: str) -> None:
     """
     The "Remove words" screen: remove words by name, number, pattern or box, or remove
-    all,
-    with undo for every removal made on this screen.
+    all, with undo for every removal made on this screen. The user can also show the
+    list again (l) or the help (h); Enter or q goes back to the main menu.
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck. It is changed in place.
+            - deckPath (str): The deck file, saved after every removal and undo. A
+              backup is made before every removal.
     """
 
     if not cards:

@@ -11,8 +11,17 @@ WEEK_DAYS = 7
 
 def countDueWithin(cards: list[Card], today: date, days: int) -> int:
     """
-    Count the cards that are due within the next number of days (0 = today, including
-    overdue cards).
+    Count the cards that are due within the next number of days.
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck.
+            - today (date): The day to count from.
+            - days (int): How many days ahead to look: 0 counts the cards due today, 6
+              the cards due within this week (today plus 6 days). Overdue cards are
+              always counted.
+    Returns:
+        int: The number of due cards.
     """
 
     lastDay = today + timedelta(days=days)
@@ -22,6 +31,14 @@ def countDueWithin(cards: list[Card], today: date, days: int) -> int:
 def countByBox(cards: list[Card]) -> dict[int, int]:
     """
     Return how many cards are in each Leitner box, e.g. {1: 4, 2: 1, 3: 0, 4: 0, 5: 2}.
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck. A box outside 1-5 (from a hand-edited deck)
+              is counted in the nearest box (see leitnerScheduler.clampBox).
+    Returns:
+        dict[int, int]: {box: number of cards} for every box from 1 to 5, in order,
+        including the empty ones.
     """
 
     counts = dict.fromkeys(
@@ -37,6 +54,21 @@ def countByBox(cards: list[Card]) -> dict[int, int]:
 def calculateStats(cards: list[Card], today: date) -> dict:
     """
     Collect the numbers shown on the progress screen.
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck.
+            - today (date): The day used for the "due" numbers.
+    Returns:
+        dict: The numbers:
+            - "words": how many cards are in the deck;
+            - "dueToday": cards due today, overdue cards included;
+            - "dueThisWeek": cards due within the next 7 days, today included;
+            - "mastered": cards in box 5;
+            - "neverReviewed": cards that have no answers yet;
+            - "correct": right answers over all cards;
+            - "reviewed": all answers over all cards;
+            - "boxes": cards per box (see countByBox).
     """
 
     boxes = countByBox(cards)
@@ -56,8 +88,18 @@ def calculateStats(cards: list[Card], today: date) -> dict:
 
 def formatBar(count: int, largestCount: int) -> str:
     """
-    A bar whose length shows count compared with the largest count (at least 1 block
-    when count > 0).
+    A bar whose length shows count compared with the largest count, for the "cards per
+    box" chart.
+
+    Parameters:
+        Mandatory:
+            - count (int): The number this bar stands for.
+            - largestCount (int): The largest number in the chart. Its bar is
+              MAX_BAR_LENGTH blocks long.
+    Returns:
+        str: The bar, made of BAR_CHARACTER blocks. At least 1 block when count is
+        above 0, so a small number is still visible; "" when count or largestCount
+        is 0.
     """
 
     if count == 0 or largestCount == 0:
@@ -69,6 +111,16 @@ def formatBar(count: int, largestCount: int) -> str:
 def hardestWords(cards: list[Card], limit: int = 5) -> list[Card]:
     """
     The cards answered wrongly most often (only cards with at least one wrong answer).
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck.
+        Optional:
+            - limit (int): The most cards to return. Default: 5.
+    Returns:
+        list[Card]: The cards with the most wrong answers first. With the same number
+        of wrong answers, the card with fewer right answers comes first, then
+        alphabetical order.
     """
 
     wrongCards = [eachCard for eachCard in cards if eachCard.wrongCount > 0]
@@ -86,6 +138,14 @@ def hardestWords(cards: list[Card], limit: int = 5) -> list[Card]:
 def showProgress(cards: list[Card], today: date | None = None) -> None:
     """
     Print the progress screen: totals, accuracy, cards per box and the hardest words.
+    An empty deck only gets a short message.
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck.
+        Optional:
+            - today (date | None): The day used for the "due" numbers.
+              Default: None (today's date).
     """
 
     if today is None:

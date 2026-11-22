@@ -58,6 +58,15 @@ def maskWord(text: str, word: str) -> str:
     Hide the word (and forms like "cats" for "cat") in a sentence, so clues do not give
     the answer away.
     Example: maskWord("I have two cats.", "cat") -> "I have two ____."
+
+    Parameters:
+        Mandatory:
+            - text (str): The definition or example sentence to show as a clue.
+            - word (str): The word to hide, in any upper / lower case.
+    Returns:
+        str: The text with every whole-word use of the word replaced by MASK ("____"),
+        together with a regular ending: -s, -es, -ed, -ing, -er, -est or 's. The start
+        of a longer word is left alone ("cat" does not blank "category").
     """
 
     # Only a regular ending may follow the word. "\w*" would also hide the start of a
@@ -69,7 +78,16 @@ def maskWord(text: str, word: str) -> str:
 def makeHint(word: str) -> str:
     """
     Show the first letter and the length of the word.
-    Example: "ambiguous" -> "a________ (9 letters)"
+    Examples:
+        "ambiguous" -> "a________ (9 letters)"
+        "ice cream" -> "i__ _____ (8 letters)"
+
+    Parameters:
+        Mandatory:
+            - word (str): The answer.
+    Returns:
+        str: The first character, then "_" for every other letter (spaces, hyphens and
+        apostrophes are shown as they are), then the number of letters in brackets.
     """
 
     letterCount = sum(eachCharacter.isalpha() for eachCharacter in word)
@@ -84,6 +102,15 @@ def normalizeAnswer(text: str) -> str:
     """
     Make a typed answer easy to compare: lowercase, single spaces, no full stop at the
     end.
+
+    Parameters:
+        Mandatory:
+            - text (str): What the user typed, or the word itself.
+    Returns:
+        str: The text with curly quotes made straight, dashes and hyphens turned into
+        spaces, runs of spaces made single, punctuation (. ! ? , ; : " ') removed from
+        both ends, and everything in lowercase.
+        Example: "  Ice-Cream. " -> "ice cream"
     """
 
     text = text.translate(QUOTE_TRANSLATION).replace("-", " ")
@@ -91,14 +118,34 @@ def normalizeAnswer(text: str) -> str:
 
 
 def isSpellingCorrect(answer: str, word: str) -> bool:
+    """
+    Tell whether a typed answer is the word, ignoring small differences (see
+    normalizeAnswer): upper / lower case, extra spaces, curly quotes, hyphens, and a
+    full stop at the end.
+
+    Parameters:
+        Mandatory:
+            - answer (str): What the user typed.
+            - word (str): The right answer.
+    Returns:
+        bool: True if the answer counts as right, otherwise False.
+    """
+
     return normalizeAnswer(answer) == normalizeAnswer(word)
 
 
 def normalizeSpokenText(text: str) -> str:
     """
     Make a transcription easy to compare: remove audio tags like "(laughs)" or
-    "[noise]",
-    punctuation and hyphens, then lowercase.
+    "[noise]", punctuation and hyphens, then lowercase.
+
+    Parameters:
+        Mandatory:
+            - text (str): The transcription, or the word itself.
+    Returns:
+        str: The words only, in lowercase and separated by single spaces. Apostrophes
+        are kept ("it's").
+        Example: "(noise) It's ambiguous!" -> "it's ambiguous"
     """
 
     text = AUDIO_TAG.sub(" ", text).replace("-", " ")
@@ -109,8 +156,18 @@ def normalizeSpokenText(text: str) -> str:
 
 def isSpokenCorrect(transcription: str, word: str) -> bool:
     """
-    Return True if the word was said, even inside a short phrase ("It's ambiguous."
+    Tell whether the word was said, even inside a short phrase ("It's ambiguous."
     counts for "ambiguous").
+
+    Parameters:
+        Mandatory:
+            - transcription (str): What the speech-to-text service heard.
+            - word (str): The right answer.
+    Returns:
+        bool: True if the whole word (or phrase) appears in the transcription as
+        separate words, after both are cleaned up (see normalizeSpokenText). False for
+        a word that is empty after cleaning, and for a word only heard inside a longer
+        word ("cat" in "category").
     """
 
     target = normalizeSpokenText(word)
@@ -123,7 +180,14 @@ def isSpokenCorrect(transcription: str, word: str) -> bool:
 
 def formatTranslation(card: Card) -> str:
     """
-    The "Chinese: ..." line, or "" if the card has no translation.
+    The "Chinese: ..." line shown under a card.
+
+    Parameters:
+        Mandatory:
+            - card (Card): The card.
+    Returns:
+        str: "  Chinese: <translation>", with the label in dark gray and the
+        translation in green, or "" if the card has no translation.
     """
 
     if card.translation == "":
@@ -137,6 +201,16 @@ def formatTranslation(card: Card) -> str:
 
 
 def formatFront(card: Card) -> str:
+    """
+    The front of the card: just the word.
+
+    Parameters:
+        Mandatory:
+            - card (Card): The card.
+    Returns:
+        str: The word, indented and in bold violet.
+    """
+
     return INDENT + ChatColor.paint(card.word, ChatColor.BOLD, ChatColor.VIOLET)
 
 
@@ -144,6 +218,15 @@ def formatCardBack(card: Card) -> str:
     """
     The back of the card: numbered definitions with examples, then the Chinese
     translation.
+
+    Parameters:
+        Mandatory:
+            - card (Card): The card.
+    Returns:
+        str: The definitions formatted like a dictionary lookup (see
+        connectFreeDictionaryAPI.formatWordDefinition), or a note that the card has no
+        meaning yet; then a blank line and the "Chinese: ..." line when the card has a
+        translation.
     """
 
     if card.definitions:
@@ -170,8 +253,16 @@ def formatCardBack(card: Card) -> str:
 def formatClues(card: Card) -> str:
     """
     Clues for guessing the word: numbered definitions and one example each (with the
-    word hidden),
-    then the Chinese translation and a hint.
+    word hidden), then the Chinese translation and a hint. Used by the Spelling and
+    Speaking modes.
+
+    Parameters:
+        Mandatory:
+            - card (Card): The card to make clues for.
+    Returns:
+        str: The clues: a "Clues:" title, each definition with the word hidden (see
+        maskWord) and its first example sentence (also hidden), the "Chinese: ..."
+        line when there is a translation, and a "Hint:" line (see makeHint).
     """
 
     lines = [ChatColor.paint("Clues:", ChatColor.BOLD)]
@@ -213,7 +304,13 @@ def formatClues(card: Card) -> str:
 
 def playSafely(word: str) -> bool:
     """
-    Play the word's pronunciation. Prints the problem and returns False if it fails.
+    Play the word's pronunciation, without letting a problem stop the review.
+
+    Parameters:
+        Mandatory:
+            - word (str): The word to pronounce (see speechHelper.pronounce).
+    Returns:
+        bool: True if it was played. False if it failed; the problem is printed in red.
     """
 
     try:
@@ -233,7 +330,15 @@ def playSafely(word: str) -> bool:
 
 def askMeaning(card: Card) -> bool | None:
     """
-    Show the word, let the user think, flip the card, then let the user mark themselves.
+    Meaning mode: show the word, let the user think, flip the card, then let the user
+    mark themselves. When speech is set up, "p" plays the word first.
+
+    Parameters:
+        Mandatory:
+            - card (Card): The card to ask about.
+    Returns:
+        bool | None: True if the user says they remembered it, False if not, None if
+        the user wants to stop (q, Ctrl+C or Ctrl+Z / Ctrl+D).
     """
 
     print(formatFront(card))
@@ -266,7 +371,14 @@ def askMeaning(card: Card) -> bool | None:
 
 def askSpelling(card: Card) -> bool | None:
     """
-    Show the clues and let the user type the word.
+    Spelling mode: show the clues and let the user type the word.
+
+    Parameters:
+        Mandatory:
+            - card (Card): The card to ask about.
+    Returns:
+        bool | None: True if the typed word is right (see isSpellingCorrect), False if
+        it is wrong, None if the user wants to stop.
     """
 
     print(formatClues(card))
@@ -282,7 +394,15 @@ def askSpelling(card: Card) -> bool | None:
 
 def askListening(card: Card) -> bool | None:
     """
-    Play the word and let the user type what they heard.
+    Listening mode: play the word and let the user type what they heard. "r" plays it
+    again.
+
+    Parameters:
+        Mandatory:
+            - card (Card): The card to ask about.
+    Returns:
+        bool | None: True if the typed word is right (see isSpellingCorrect), False if
+        it is wrong, None if the user wants to stop or the word could not be played.
     """
 
     print(
@@ -307,7 +427,15 @@ def askListening(card: Card) -> bool | None:
 
 def askSpeaking(card: Card) -> bool | None:
     """
-    Show the clues and let the user say the word out loud.
+    Speaking mode: show the clues and let the user say the word out loud. The
+    recording is turned into text and shown, so the user sees what was heard.
+
+    Parameters:
+        Mandatory:
+            - card (Card): The card to ask about.
+    Returns:
+        bool | None: True if the word was heard (see isSpokenCorrect), False if not,
+        None if recording or transcribing failed (the problem is printed).
     """
 
     print(formatClues(card))
@@ -334,8 +462,17 @@ def askSpeaking(card: Card) -> bool | None:
 
 def askSentence(card: Card) -> bool | None:
     """
-    Let the user write a sentence with the word, and ask the AI tutor whether it is used
-    correctly.
+    Sentence mode: let the user write a sentence with the word, and ask the AI tutor
+    whether it is used correctly. The tutor's feedback is printed.
+
+    Parameters:
+        Mandatory:
+            - card (Card): The card to ask about. Its first definition is shown and
+              sent to the tutor, so the sentence is checked for the right meaning.
+    Returns:
+        bool | None: The tutor's verdict: True for correct, False for incorrect. When
+        the tutor's answer has no verdict, the user decides (y / n). None if the user
+        wants to stop or the tutor cannot be reached.
     """
 
     print(formatFront(card))
@@ -432,6 +569,15 @@ def availableModes() -> list[str]:
 def showOutcome(card: Card, isCorrect: bool, mode: str) -> None:
     """
     Tell the user whether they were right. When they were wrong, show the answer.
+
+    Parameters:
+        Mandatory:
+            - card (Card): The card that was asked.
+            - isCorrect (bool): Whether the answer was right.
+            - mode (str): The review mode (one of the MODE_ constants). In Meaning mode
+              the user has already seen the back of the card, so only a short message
+              is shown; in Sentence mode the tutor's feedback was the explanation, so
+              the card is not shown again.
     """
 
     print()

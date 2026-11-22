@@ -10,9 +10,19 @@ NO_ANSWERS = ["n", "no"]
 def ask(promptText: str, *styles: str) -> str | None:
     """
     Show a prompt and return what the user typed, with spaces trimmed.
-    Returns None if the user presses Ctrl+C or Ctrl+Z / Ctrl+D.
     A byte order mark (added by Windows when input is piped from PowerShell or a UTF-8
     file) is removed.
+
+    Parameters:
+        Mandatory:
+            - promptText (str): The text shown before the cursor, e.g. "Word: ".
+        Optional:
+            - styles (str): ChatColor codes for the prompt, e.g. ChatColor.YELLOW.
+              Default: none (plain text).
+    Returns:
+        str | None: What the user typed, without spaces at the start and the end (it
+        can be "" when the user only pressed Enter). None if the user pressed Ctrl+C,
+        or ended the input with Ctrl+Z (Windows) / Ctrl+D (macOS, Linux).
     """
 
     try:
@@ -26,7 +36,14 @@ def ask(promptText: str, *styles: str) -> str | None:
 
 def isQuit(answer: str | None) -> bool:
     """
-    Return True if the answer means "stop" (q / quit / exit, Ctrl+C or Ctrl+Z / Ctrl+D).
+    Tell whether an answer means "stop": q, quit or exit (in any upper / lower case),
+    or None, which ask() returns for Ctrl+C or Ctrl+Z / Ctrl+D.
+
+    Parameters:
+        Mandatory:
+            - answer (str | None): What ask() returned.
+    Returns:
+        bool: True if the user wants to stop, otherwise False.
     """
 
     return answer is None or answer.lower() in QUIT_COMMANDS

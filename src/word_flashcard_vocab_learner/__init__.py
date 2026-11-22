@@ -113,6 +113,15 @@ def main(deckPath: str | None = None) -> None:
 
 
 def printWelcome(cards: list[Card]) -> None:
+    """
+    Print the welcome message when the app starts, with the size of the deck and how
+    many cards are due today.
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck that was just loaded.
+    """
+
     print()
     print(
         ChatColor.paint(
@@ -137,6 +146,14 @@ def printWelcome(cards: list[Card]) -> None:
 def askMenuChoice(cards: list[Card]) -> str | None:
     """
     Print the main menu and return the user's choice.
+    The "Review cards" item shows how many cards are due today, when there are any.
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck, used to count the due cards.
+    Returns:
+        str | None: What the user typed (see userInput.ask), e.g. "1" to "9", "c" or
+        "q". None if the user pressed Ctrl+C or Ctrl+Z / Ctrl+D.
     """
 
     dueCount = len(cardDeck.getDueCards(cards, date.today()))
@@ -176,7 +193,18 @@ def askMenuChoice(cards: list[Card]) -> str | None:
 
 def isDeckEmpty(cards: list[Card], message: str = EMPTY_DECK_MESSAGE) -> bool:
     """
-    Return True (and tell the user) when the deck has no cards.
+    Tell whether the deck has no cards, and if so, tell the user. Screens that need
+    cards call this first and go back to the menu when it returns True.
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck.
+        Optional:
+            - message (str): What to tell the user, in orange.
+              Default: EMPTY_DECK_MESSAGE ("Your deck is empty. Look up some words and
+              add them first.").
+    Returns:
+        bool: True if the deck is empty (the message was printed), otherwise False.
     """
 
     if cards:
@@ -189,6 +217,13 @@ def isDeckEmpty(cards: list[Card], message: str = EMPTY_DECK_MESSAGE) -> bool:
 def printSaveError(error: Exception, note: str) -> None:
     """
     Show why the deck file could not be saved, then what that means for the user.
+
+    Parameters:
+        Mandatory:
+            - error (Exception): The save error, usually a cardDeck.DeckSaveError. Its
+              message is printed in red.
+            - note (str): What happened to the user's change, printed in orange, e.g.
+              "The change is in this session, but the deck file was not updated."
     """
 
     print(ChatColor.paint(f"  {error}", ChatColor.RED))
@@ -203,6 +238,18 @@ class ProgressSaver:
     """
 
     def __init__(self, cards: list[Card], deckPath: str, note: str) -> None:
+        """
+        Set up the saver. Nothing is saved until the saver is called.
+
+        Parameters:
+            Mandatory:
+                - cards (list[Card]): The whole deck to save each time.
+                - deckPath (str): The deck file.
+                - note (str): What to tell the user, in orange, when a save fails,
+                  e.g. "  Your answers are kept for this session, but the deck file
+                  was not updated."
+        """
+
         self.cards = cards
         self.deckPath = deckPath
         self.note = note
@@ -225,7 +272,13 @@ class ProgressSaver:
 
 def lookUpWords(cards: list[Card], deckPath: str) -> None:
     """
-    Look up words one after another. An empty line or 'q' goes back to the menu.
+    The "Look up and add words" screen: look up words one after another. An empty line
+    or 'q' goes back to the menu.
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck. Words the user adds are appended to it.
+            - deckPath (str): The deck file, saved after every added word.
     """
 
     print(
@@ -251,8 +304,14 @@ def showDefinitions(word: str, cards: list[Card], deckPath: str) -> None:
     """
     Look up the word and print its definitions.
     If it was found: show the Chinese translation (AI tutor), offer the pronunciation
-    (speech),
-    and offer to add it to the deck.
+    (speech), and offer to add it to the deck. When the dictionary cannot be reached,
+    the problem is printed instead.
+
+    Parameters:
+        Mandatory:
+            - word (str): The word the user typed.
+            - cards (list[Card]): The deck.
+            - deckPath (str): The deck file.
     """
 
     try:
@@ -286,8 +345,14 @@ def showDefinitions(word: str, cards: list[Card], deckPath: str) -> None:
 
 def lookUpTranslation(result: dict) -> str:
     """
-    Get the Chinese translation from the AI tutor. Returns "" if the AI tutor is not set
-    up or fails.
+    Get the Chinese translation from the AI tutor, for the first meaning of the word.
+
+    Parameters:
+        Mandatory:
+            - result (dict): The dictionary result (see getWordDefinition).
+    Returns:
+        str: The translation. "" if the AI tutor is not set up (no LLM_API_KEY), or if
+        it fails (the problem is then printed in orange).
     """
 
     if not genAITutor.isAIAvailable():
@@ -310,6 +375,11 @@ def lookUpTranslation(result: dict) -> str:
 def offerPronunciation(word: str) -> None:
     """
     Ask whether to play the word's pronunciation, and play it if the user says yes.
+    Enter means no. A problem while playing is printed, not raised.
+
+    Parameters:
+        Mandatory:
+            - word (str): The word to pronounce.
     """
 
     if not askYesNo("Play pronunciation? (y/N) ", default=False):
@@ -325,7 +395,16 @@ def offerToAdd(
     result: dict, translation: str, cards: list[Card], deckPath: str
 ) -> None:
     """
-    Ask whether to add the word to the deck, unless it is already there.
+    Ask whether to add the word to the deck, unless it is already there (then its box is
+    shown instead). Enter means no. The deck is saved right after the word is added.
+
+    Parameters:
+        Mandatory:
+            - result (dict): The dictionary result (see getWordDefinition).
+            - translation (str): The Chinese translation, or "".
+            - cards (list[Card]): The deck. A new card is appended to it.
+            - deckPath (str): The deck file. If it cannot be written, the word stays in
+              this session and the user is told.
     """
 
     word = result["word"]
@@ -367,9 +446,16 @@ def offerToAdd(
 
 def startReview(cards: list[Card], deckPath: str) -> None:
     """
-    Review the cards that are due today. If none are due, offer extra practice
-    with all cards (extra practice does not change boxes or review dates).
-    After each batch of 20 cards the user can carry on with the rest of the due cards.
+    The "Review cards" screen: review the cards that are due today. If none are due,
+    offer extra practice with all cards (extra practice does not change boxes or review
+    dates). After each batch of 20 cards the user can carry on with the rest of the due
+    cards.
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck. Reviewed cards are changed in place.
+            - deckPath (str): The deck file, saved after every answer (see
+              ProgressSaver).
     """
 
     if isDeckEmpty(cards):
@@ -509,6 +595,17 @@ def askReviewMode() -> str | None:
 
 
 def printSummary(summary: dict) -> None:
+    """
+    Print the "Session finished" screen after a review: how many cards were reviewed,
+    how many were right and wrong, and the score in percent.
+
+    Parameters:
+        Mandatory:
+            - summary (dict): The result of reviewCards.reviewCards: {"reviewed": int,
+              "correct": int, "wrong": int, "stopped": bool}. When no card was
+              reviewed, only "No cards reviewed." is shown.
+    """
+
     reviewed = summary["reviewed"]
 
     terminalDisplay.printHeading("Session finished")
@@ -539,8 +636,18 @@ def printSummary(summary: dict) -> None:
 
 def showDeck(cards: list[Card], deckPath: str) -> None:
     """
-    List every card with its box, next review date, score and translation.
-    Long decks are shown a page at a time, so the numbers stay readable.
+    The "View my deck" screen: list every card with its box, next review date, score
+    and translation. Long decks are shown a page at a time (DECK_PAGE_SIZE words), so
+    the numbers stay readable. A terminal narrower than NARROW_DECK_WIDTH shows each
+    card on its own lines instead of a table, and long words and translations are
+    shortened with "…" so nothing runs past the edge of the screen.
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck. Cards are listed in alphabetical order and
+              numbered like on the "Remove words" screen.
+            - deckPath (str): The deck file, shown at the end so the user knows where
+              the deck is saved.
     """
 
     if isDeckEmpty(cards):
@@ -640,7 +747,16 @@ def showDeck(cards: list[Card], deckPath: str) -> None:
 
 def exportDeck(cards: list[Card], deckPath: str) -> None:
     """
-    Save the deck as a CSV file for Excel, Google Sheets, Quizlet or Anki.
+    The "Export deck to CSV" screen: save the deck as a CSV file for Excel, Google
+    Sheets, Quizlet or Anki. Enter uses DEFAULT_EXPORT_FILE ("vocabulary.csv"); a
+    folder gets that file name inside it; a name without an extension gets ".csv"; and
+    an existing file is only replaced when the user says yes.
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck to export.
+            - deckPath (str): The deck file. Not used here, but every menu screen takes
+              the same two parameters.
     """
 
     if isDeckEmpty(cards, "Your deck is empty, so there is nothing to export."):
@@ -684,9 +800,18 @@ def exportDeck(cards: list[Card], deckPath: str) -> None:
 
 def editCard(cards: list[Card], deckPath: str) -> None:
     """
-    Change a card that is already in the deck: its word, its Chinese translation or its
-    meaning.
-    Pressing Enter on a question keeps the current value; "-" clears that part.
+    The "Edit a card" screen: change a card that is already in the deck: its word, its
+    Chinese translation or its meaning. Pressing Enter on a question keeps the current
+    value; "-" clears that part. A new word that is already in the deck is refused, and
+    a new meaning replaces all the definitions with that one line (and removes the
+    example sentences, which belonged to the old definitions).
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck. The card is changed in place.
+            - deckPath (str): The deck file, saved once all questions are answered. If
+              it cannot be written, the change stays in this session and the user is
+              told.
     """
 
     if isDeckEmpty(cards):
@@ -759,7 +884,15 @@ def editCard(cards: list[Card], deckPath: str) -> None:
 
 def practiseOneWord(cards: list[Card], deckPath: str) -> None:
     """
-    Review a single card, whatever its next review date, in the mode the user picks.
+    The "Practise one word" screen: review a single card, whatever its next review
+    date, in the mode the user picks. The answer counts like a normal review: the box
+    and next review date change.
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck. The card is changed in place.
+            - deckPath (str): The deck file, saved after the answer (see
+              ProgressSaver).
     """
 
     if isDeckEmpty(cards):

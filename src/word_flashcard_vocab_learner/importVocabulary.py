@@ -24,7 +24,10 @@ PDF_EXTENSIONS = [".pdf"]
 WORD_EXTENSIONS = [".docx"]
 IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff", ".webp"]
 
-# Column names that mean "this column holds the Chinese translation" / "the word".
+# Column titles of a CSV file that mean "this column holds the Chinese translation"
+# (compared ignoring upper / lower case): the English titles, plus 中文 ("Chinese"),
+# 解释 and 解釋 ("explanation", in simplified and in traditional characters) and 意思
+# ("meaning").
 TRANSLATION_HEADERS = [
     "chinese",
     "translation",
@@ -34,6 +37,9 @@ TRANSLATION_HEADERS = [
     "解釋",
     "意思",
 ]
+# Column titles that mean "this column holds the English word": the English titles,
+# plus 单词 and 單詞 ("word", in simplified and in traditional characters) and 英文
+# ("English").
 WORD_HEADERS = ["word", "words", "english", "vocabulary", "单词", "單詞", "英文"]
 
 MAX_IMPORT_WORDS = 100
@@ -68,12 +74,18 @@ URL_OR_EMAIL = re.compile(r"(?:https?://|www\.)\S+|[\w.+-]+@[\w-]+\.[\w.]+")
 # The label at the start of a note line ("Note: …", "- …"), which says nothing about the
 # line being a list entry.
 LINE_LABEL = re.compile(r"^\s*(?:[A-Za-z]{2,}\s*:|[-*•·▪◦]\s+)")
-# The separator between the word and its meaning in a word list ("word - meaning",
-# "word\tmeaning", "word 中文").
+# The separator between the word and its meaning in a word list: a dash or "=" with
+# spaces around it, a tab, a comma, a semicolon, or the first Chinese character.
+# Examples: "word - meaning", "word\tmeaning", "word 中文" (中文 stands for a meaning
+# written in Chinese).
 LIST_SEPARATOR = re.compile(r"\s+[-–—=]\s+|[\t,;]|[\u3000-\u9fff]")
 # The number or bullet at the start of a word-list line: "1. ", "2) ", "3、", "- ", "• ".
+# 、 is the comma that Chinese text uses after a list number.
 LIST_MARKER = re.compile(r"^\s*(\d+\s*[.)、]|[-*•·▪◦])\s*")
-# Where the meaning starts after the word in a word-list line.
+# Where the meaning starts after the word in a word-list line: a dash, "=" or ":" after
+# a space; a tab, comma, semicolon, colon or "="; an opening bracket "(" or "["; the
+# full-width colon "：" and bracket "（" used in Chinese text; or the first Chinese
+# character.
 MEANING_START = re.compile(r"\s+[-–—=:]\s*|[\t,;:：(（\[=]|[\u3000-\u9fff]")
 # Chinese characters and full-width punctuation: a cell with these is a translation, not
 # an English meaning.
@@ -140,8 +152,18 @@ WORD_ENDINGS = ["ing", "ed", "es", "er", "est", "ly", "s", "d"]
 
 def isCommonWord(word: str) -> bool:
     """
-    Return True if the word, or the word without a simple ending, is a very common word.
-    Examples: "showed" (show), "making" (make), "friends" (friend)
+    Tell whether the word, or the word without a simple ending, is a very common word.
+    Examples: "showed" (show), "making" (make), "friends" (friend), "earlier" (early),
+    "stopped" (stop)
+
+    Parameters:
+        Mandatory:
+            - word (str): The word in lowercase.
+    Returns:
+        bool: True if the word is in COMMON_WORDS, or becomes a common word when an
+        ending from WORD_ENDINGS is taken off (also adding back an "e", changing "i"
+        back to "y", or undoing a doubled last letter). Stems shorter than 3 letters
+        are not checked. Otherwise False.
     """
 
     if word in COMMON_WORDS:
@@ -183,6 +205,14 @@ def cleanPath(path: str) -> str:
     """
     Tidy a path the user typed or dragged into the terminal: remove surrounding quotes
     and expand "~".
+
+    Parameters:
+        Mandatory:
+            - path (str): The path as typed, e.g. '"C:\\My Files\\words.txt"' (a
+              terminal adds the quotes when a file is dragged in) or "~/words.txt".
+    Returns:
+        str: The path without spaces or quotes around it, with "~" replaced by the
+        home folder.
     """
 
     return os.path.expanduser(path.strip().strip('"').strip("'"))
@@ -191,8 +221,19 @@ def cleanPath(path: str) -> str:
 def readTextFromFile(path: str) -> str:
     """
     Read all the text from a text, CSV, PDF, Word (.docx) or image file.
-    Scanned PDFs and images are read with OCR (Tesseract).
-    Raises FileImportError with a simple message if the file cannot be read.
+    Scanned PDFs and images are read with OCR (Tesseract). The file extension decides
+    how the file is read (upper / lower case does not matter).
+
+    Parameters:
+        Mandatory:
+            - path (str): The file to read.
+    Returns:
+        str: The text of the file. For a CSV / TSV file, only its first column, one
+        cell per line (see readCSVFile).
+    Raises:
+        FileImportError: With a simple message for the user when the file does not
+        exist, has an unsupported type (including old .doc files), needs a library or
+        program that is not installed, or cannot be read.
     """
 
     if not os.path.isfile(path):
@@ -231,6 +272,16 @@ def readTextFile(path: str) -> str:
     """
     Read a plain text file. Tries UTF-8 first, then the computer's own encoding (e.g.
     Big5 on a Hong Kong PC).
+
+    Parameters:
+        Mandatory:
+            - path (str): The text file.
+    Returns:
+        str: The text, without a UTF-8 byte order mark, and with Windows ("\\r\\n") and
+        old Mac ("\\r") line endings turned into "\\n". If neither encoding works, the
+        file is read as UTF-8 with unreadable bytes replaced by "�".
+    Raises:
+        OSError: When the file cannot be opened.
     """
 
     with open(path, "rb") as textFile:
@@ -250,6 +301,19 @@ def readTextFile(path: str) -> str:
 
 
 def readCSVRows(path: str, delimiter: str) -> list[list[str]]:
+    """
+    Read all rows of a CSV / TSV file. The text is read like any text file (see
+    readTextFile), so both UTF-8 and the computer's own encoding work.
+
+    Parameters:
+        Mandatory:
+            - path (str): The CSV or TSV file.
+            - delimiter (str): The cell separator: "," for CSV, a tab for TSV.
+    Returns:
+        list[list[str]]: One list of cells for each row. Rows can have different
+        lengths, and an empty line gives an empty list.
+    """
+
     # Cells may contain line breaks, so the csv module is used instead of reading lines.
     return list(csv.reader(io.StringIO(readTextFile(path)), delimiter=delimiter))
 
@@ -257,8 +321,16 @@ def readCSVRows(path: str, delimiter: str) -> list[list[str]]:
 def readCSVFile(path: str, delimiter: str) -> str:
     """
     Read the first column of a CSV / TSV file (e.g. a deck exported from this app, Excel
-    or Quizlet),
-    one word per line.
+    or Quizlet), one word per line.
+
+    Parameters:
+        Mandatory:
+            - path (str): The CSV or TSV file.
+            - delimiter (str): The cell separator: "," for CSV, a tab for TSV.
+    Returns:
+        str: The first cell of every row, without spaces around it, joined with
+        newlines. Empty cells and empty rows are left out. A header row such as "Word"
+        is kept here; it is skipped later as a title line (see isHeadingLine).
     """
 
     cells = (eachRow[0].strip() for eachRow in readCSVRows(path, delimiter) if eachRow)
@@ -268,10 +340,18 @@ def readCSVFile(path: str, delimiter: str) -> str:
 def readCSVTranslations(path: str, delimiter: str) -> dict[str, str]:
     """
     Read the translation column of a CSV / TSV file, e.g. a deck exported from this app.
-    Returns {word (casefolded): translation}; an empty dict if the file has no such
-    column.
     The header row decides the columns, so column 1 is only assumed to be the word
-    when the header does not say otherwise.
+    when the header does not say otherwise. A file without a header row still works
+    when its second column holds Chinese (e.g. "cat,貓").
+
+    Parameters:
+        Mandatory:
+            - path (str): The CSV or TSV file.
+            - delimiter (str): The cell separator: "," for CSV, a tab for TSV.
+    Returns:
+        dict[str, str]: {word in lowercase (casefold): translation}. Rows that are too
+        short, or have an empty word or translation, are skipped. An empty dict if the
+        file has no translation column.
     """
 
     rows = readCSVRows(path, delimiter)
@@ -286,8 +366,9 @@ def readCSVTranslations(path: str, delimiter: str) -> dict[str, str]:
     if hasHeader:
         dataRows = rows[1:]
     elif any(len(eachRow) > 1 and CHINESE_TEXT.search(eachRow[1]) for eachRow in rows):
-        # No header names the translation column, e.g. "cat,貓" with no header row.
-        # A second column holding Chinese is still taken as the translation.
+        # No header names the translation column, e.g. a file of lines like "cat,貓"
+        # (貓 is Chinese for "cat") with no header row. A second column that holds
+        # Chinese is still taken as the translation.
         translationIndex = 1
         dataRows = rows
     else:
@@ -318,8 +399,16 @@ def readCSVTranslations(path: str, delimiter: str) -> dict[str, str]:
 
 def columnIndex(header: list[str], names: list[str], default: int) -> int:
     """
-    The position of the first header cell that is one of names, or default if there is
-    none.
+    Find a column by its title.
+
+    Parameters:
+        Mandatory:
+            - header (list[str]): The cells of the header row, already in lowercase.
+            - names (list[str]): The titles to look for, e.g. TRANSLATION_HEADERS.
+            - default (int): What to return when no cell matches.
+    Returns:
+        int: The position (from 0) of the first header cell that is one of names, or
+        default if there is none.
     """
 
     return next(
@@ -331,6 +420,17 @@ def readPDF(path: str) -> str:
     """
     Read the text of every page of a PDF.
     Pages without text (scanned pages) are read with OCR when it is installed.
+    A PDF that is locked with an empty password is opened too.
+
+    Parameters:
+        Mandatory:
+            - path (str): The PDF file.
+    Returns:
+        str: The text of all pages, one page after another. Without OCR, a scanned page
+        in an otherwise normal PDF stays (almost) empty.
+    Raises:
+        FileImportError: When pypdf is not installed, the PDF cannot be read, or every
+        page is scanned and OCR is not installed.
     """
 
     try:
@@ -375,6 +475,16 @@ def readPDF(path: str) -> str:
 def readWordDocument(path: str) -> str:
     """
     Read the paragraphs and table cells of a Word (.docx) document.
+
+    Parameters:
+        Mandatory:
+            - path (str): The .docx file.
+    Returns:
+        str: Every paragraph on its own line, then every table row on its own line
+        with its cells separated by tabs (so "word<tab>meaning" tables read like a word
+        list).
+    Raises:
+        FileImportError: When python-docx is not installed or the file cannot be read.
     """
 
     try:
@@ -402,6 +512,16 @@ def readWordDocument(path: str) -> str:
 def readImage(path: str) -> str:
     """
     Read the text in a photo or scan with OCR.
+
+    Parameters:
+        Mandatory:
+            - path (str): The image file (.png, .jpg, .jpeg, .bmp, .gif, .tif, .tiff or
+              .webp).
+    Returns:
+        str: The English text that Tesseract found in the image.
+    Raises:
+        FileImportError: When Pillow, pytesseract or Tesseract is not installed, the
+        image cannot be opened, or OCR fails.
     """
 
     try:
@@ -452,6 +572,16 @@ def isOCRAvailable() -> bool:
 def runOCR(image) -> str:
     """
     Read English text from a Pillow image with Tesseract.
+
+    Parameters:
+        Mandatory:
+            - image (PIL.Image.Image): The picture to read, e.g. an opened photo or a
+              rendered PDF page.
+    Returns:
+        str: The text that Tesseract found.
+    Raises:
+        FileImportError: When pytesseract is not installed, the Tesseract program
+        cannot be found (see findTesseract), or OCR fails.
     """
 
     try:
@@ -477,6 +607,16 @@ def runOCR(image) -> str:
 def renderPDFPages(path: str, pageIndexes: list[int]) -> list:
     """
     Turn PDF pages into Pillow images so they can be read with OCR.
+    The pages are rendered at OCR_DPI (300 dots per inch), sharp enough for OCR.
+
+    Parameters:
+        Mandatory:
+            - path (str): The PDF file.
+            - pageIndexes (list[int]): The pages to render, counted from 0.
+    Returns:
+        list: One Pillow image per page, in the same order as pageIndexes.
+    Raises:
+        FileImportError: When pypdfium2 is not installed.
     """
 
     try:
@@ -506,6 +646,14 @@ def cleanText(text: str) -> str:
     front matter block at the top, and links or e-mail addresses. Otherwise "---",
     "title: test" and the parts of a URL make the text look like a word list and end up
     as cards.
+
+    Parameters:
+        Mandatory:
+            - text (str): The text read from a file.
+    Returns:
+        str: The text without byte order marks, without a front matter block at the
+        very start ("--- ... ---" or "+++ ... +++"), and with every link or e-mail
+        address replaced by a space.
     """
 
     text = text.replace("\ufeff", "")
@@ -515,8 +663,16 @@ def cleanText(text: str) -> str:
 
 def isSentenceLine(line: str) -> bool:
     """
-    Return True for a line of prose (a sentence), which a word list never contains.
+    Tell whether a line is prose (a sentence), which a word list never contains.
     Such a line ends with . ! ? and is not "word - meaning" with a list separator in it.
+
+    Parameters:
+        Mandatory:
+            - line (str): One line of the text.
+    Returns:
+        bool: True if the line ends with . ! or ?, has no list separator (see
+        LIST_SEPARATOR) once a label like "Note:" or a bullet is removed, and has at
+        least two words. Otherwise False.
     """
 
     stripped = line.strip()
@@ -535,8 +691,16 @@ def isSentenceLine(line: str) -> bool:
 def lineHead(line: str) -> str:
     """
     The part of a word-list line before its meaning.
-    Examples: "1. ambiguous - unclear" -> "ambiguous", "ice cream (n.) 雪糕" -> "ice
-    cream"
+    Examples:
+        "1. ambiguous - unclear" -> "ambiguous"
+        "ice cream (n.) 雪糕"    -> "ice cream"   (雪糕 is Chinese for "ice cream")
+
+    Parameters:
+        Mandatory:
+            - line (str): One line of a word list.
+    Returns:
+        str: The line without its number or bullet (see LIST_MARKER), cut where the
+        meaning starts (see MEANING_START), without spaces around it. Can be "".
     """
 
     return MEANING_START.split(LIST_MARKER.sub("", line), maxsplit=1)[0].strip()
@@ -545,8 +709,16 @@ def lineHead(line: str) -> str:
 def wordFromListLine(line: str) -> str | None:
     """
     Return the English word or short phrase (up to 3 words) at the start of a word-list
-    line,
-    or None if the line does not start with an English word.
+    line, or None if the line does not start with an English word.
+
+    Parameters:
+        Mandatory:
+            - line (str): One line of a word list.
+    Returns:
+        str | None: The whole head of the line (see lineHead) when it is 1 to 3
+        English words; otherwise just its first English word. Curly apostrophes become
+        straight ones ("rock’n’roll" -> "rock'n'roll"). None when the head does not
+        start with an English letter, e.g. a line that is only Chinese.
     """
 
     head = lineHead(line)
@@ -563,10 +735,17 @@ def wordFromListLine(line: str) -> str | None:
 
 def looksLikeWordList(text: str) -> bool:
     """
-    Return True if most lines are short (a word list), False if the text is a passage of
-    sentences.
-    A line of prose is never counted as short, even when it starts with "Note:" or
-    contains a link.
+    Tell whether the text is a word list (most lines are short) or a passage of
+    sentences. A line of prose is never counted as short, even when it starts with
+    "Note:" or contains a link.
+
+    Parameters:
+        Mandatory:
+            - text (str): The whole text, already cleaned (see cleanText).
+    Returns:
+        bool: True if at least WORD_LIST_SHARE (70%) of the non-empty lines are short:
+        not a sentence (see isSentenceLine) and at most 3 words before the meaning.
+        False for a passage, and for a text without any lines.
     """
 
     lines = [eachLine for eachLine in text.splitlines() if eachLine.strip() != ""]
@@ -585,8 +764,17 @@ def looksLikeWordList(text: str) -> bool:
 
 def isHeadingLine(line: str) -> bool:
     """
-    Return True for title lines in a word list, e.g. "Unit 3 vocabulary", "Lesson 5",
-    "Word" (a CSV header).
+    Tell whether a line is a title in a word list, e.g. "Unit 3 vocabulary",
+    "Lesson 5", "Word" (a CSV header), so it is not taken as a word.
+
+    Parameters:
+        Mandatory:
+            - line (str): One line of a word list.
+    Returns:
+        bool: True if the head of the line (see lineHead) contains a digit, is a single
+        column title such as "Word" or "Vocabulary" (see COLUMN_TITLES), or has several
+        words and starts with a heading word such as "unit", "lesson" or "list" (see
+        HEADING_WORDS). Otherwise False.
     """
 
     head = lineHead(line)
@@ -611,6 +799,14 @@ def wordsFromList(text: str) -> list[str]:
     """
     Take the word at the start of every line, e.g. from a vocabulary list or a CSV file.
     Title lines such as "Unit 3 vocabulary" or a "Word" header are skipped.
+
+    Parameters:
+        Mandatory:
+            - text (str): A word list, one entry per line.
+    Returns:
+        list[str]: The word or phrase of every line (see wordFromListLine), in order.
+        Lines with a link or an e-mail address, title lines, and lines without an
+        English word are skipped. Duplicates are still in the list.
     """
 
     words = []
@@ -635,15 +831,28 @@ def wordsFromPassage(text: str) -> list[str]:
     Pick possible vocabulary from a passage: skip short and very common words,
     and words that only appear with a capital letter (usually names), in order of first
     appearance.
+
+    Parameters:
+        Mandatory:
+            - text (str): The passage, already cleaned (see cleanText).
+    Returns:
+        list[str]: The words in lowercase, each once, in order of first appearance.
+        A word broken over two lines with a hyphen is joined first. Left out are:
+        words shorter than MIN_PASSAGE_WORD_LENGTH (3) letters, very common words and
+        their forms (see isCommonWord), labels like "Note:", words only ever written
+        with a capital letter in the middle of a sentence (names), and plurals whose
+        singular is also in the list (see removePlurals). "isn't" counts as "is" and
+        "student's" as "student".
     """
 
     text = SPLIT_WORD.sub(r"\1\2", text)
 
-    order = {}  # every possible word, in order of first appearance
-    inLowercase = set()  # words that were written in lowercase at least once
-    capitalized = (
-        set()
-    )  # words that were written with a capital letter in the middle of a sentence
+    # Every possible word, in order of first appearance (a dict keeps the order).
+    order = {}
+    # Words that were written in lowercase at least once.
+    inLowercase = set()
+    # Words that were written with a capital letter in the middle of a sentence.
+    capitalized = set()
 
     for eachMatch in WORD.finditer(text):
         # "Note:" / "Example:" at the start of a line is a label, not vocabulary.
@@ -683,8 +892,17 @@ def wordsFromPassage(text: str) -> list[str]:
 
 def isSentenceStart(text: str, position: int) -> bool:
     """
-    Return True if the word at this position starts a sentence or a line (so its capital
-    letter says nothing).
+    Tell whether the word at this position starts a sentence or a line (so its capital
+    letter says nothing about it being a name).
+
+    Parameters:
+        Mandatory:
+            - text (str): The passage.
+            - position (int): Where the word starts in the text.
+    Returns:
+        bool: True at the start of the text, or when the last character before the word
+        (ignoring spaces, tabs, quotes and an opening bracket, at most 6 characters
+        back) is . ! ? : or a line break. Otherwise False.
     """
 
     before = text[max(0, position - 6) : position].rstrip(" \t\"'“‘(")
@@ -698,12 +916,30 @@ def isSentenceStart(text: str, position: int) -> bool:
 def removePlurals(words: list[str]) -> list[str]:
     """
     Drop simple plural forms when the singular is also in the list: "cats" (with "cat"),
-    "boxes", "stories".
+    "boxes" (with "box"), "stories" (with "story").
+
+    Parameters:
+        Mandatory:
+            - words (list[str]): Words in lowercase, each once.
+    Returns:
+        list[str]: The same words in the same order, without the plurals whose
+        singular is also in the list. A plural on its own is kept.
     """
 
     wordSet = set(words)
 
     def isPlural(word: str) -> bool:
+        """
+        Tell whether a word is the -s, -es or -ies plural of another word in the list.
+
+        Parameters:
+            Mandatory:
+                - word (str): The word to check.
+        Returns:
+            bool: True if its singular ("stories" -> "story", "boxes" -> "box",
+            "cats" -> "cat") is also in the list, otherwise False.
+        """
+
         return (
             (word.endswith("ies") and word[:-3] + "y" in wordSet)
             or (word.endswith("es") and word[:-2] in wordSet)
@@ -718,6 +954,14 @@ def extractWords(text: str) -> list[str]:
     Find the vocabulary in some text: a word list gives one word per line,
     a passage gives its less common words. Duplicates are removed (ignoring case), order
     is kept.
+
+    Parameters:
+        Mandatory:
+            - text (str): The text read from a file (see readTextFromFile).
+    Returns:
+        list[str]: The words found, each once, in the order they appear: the words of
+        a word list as written (see wordsFromList), or the words of a passage in
+        lowercase (see wordsFromPassage). Can be empty.
     """
 
     text = cleanText(text)
@@ -729,6 +973,17 @@ def extractWords(text: str) -> list[str]:
 
 
 def uniqueWords(words: list[str]) -> list[str]:
+    """
+    Remove repeated words, ignoring upper / lower case.
+
+    Parameters:
+        Mandatory:
+            - words (list[str]): The words, possibly with repeats.
+    Returns:
+        list[str]: Each word once, in order of first appearance, written the way it
+        first appeared ("Cat", "cat" -> "Cat").
+    """
+
     seen = set()
     result = []
 
@@ -744,6 +999,15 @@ def uniqueWords(words: list[str]) -> list[str]:
 def removeKnownWords(words: list[str], cards: list[Card]) -> list[str]:
     """
     Remove the words that are already in the deck.
+
+    Parameters:
+        Mandatory:
+            - words (list[str]): The words found in a file.
+            - cards (list[Card]): The deck.
+    Returns:
+        list[str]: The words that are not in the deck yet, in the same order. Words are
+        compared the way cardDeck.findCard compares them: ignoring upper / lower case
+        and spaces around the word.
     """
 
     # The same comparison as cardDeck.findCard, but one set lookup per word instead of a
@@ -759,10 +1023,19 @@ def removeKnownWords(words: list[str], cards: list[Card]) -> list[str]:
 
 def parseSelection(answer: str, count: int) -> list[int] | None:
     """
-    Turn the user's choice into item indexes (starting from 0).
-    Accepts "" or "all" (everything), "n" / "none" (nothing), and numbers or ranges like
-    "1,3,5-8".
-    Returns None if the answer is not valid.
+    Turn the user's choice on the import screen into item indexes (starting from 0).
+
+    Parameters:
+        Mandatory:
+            - answer (str): What the user typed: "" (just Enter), "a" or "all" for
+              everything; "n", "no" or "none" for nothing; or numbers and ranges from 1,
+              separated by commas or spaces, like "1,3,5-8" (a range may be written
+              backwards: "8-5"). Upper / lower case does not matter.
+            - count (int): How many items are on the list.
+    Returns:
+        list[int] | None: The chosen indexes (number - 1), each once, in the order
+        typed. An empty list for "none". None when the answer is not valid: a part that
+        is not a number or a range, or a number outside 1 to count.
     """
 
     answer = answer.strip().lower()
@@ -800,7 +1073,14 @@ def parseSelection(answer: str, count: int) -> list[int] | None:
 def askWhichWords(words: list[str]) -> list[str] | None:
     """
     Show the found words in numbered columns and let the user choose which ones to add.
-    Returns None if the user wants to go back.
+    An answer that is not valid is explained, and the question is asked again.
+
+    Parameters:
+        Mandatory:
+            - words (list[str]): The words found in the file and not yet in the deck.
+    Returns:
+        list[str] | None: The chosen words (see parseSelection), which can be empty for
+        "none". None if the user wants to go back (q, Ctrl+C or Ctrl+Z / Ctrl+D).
     """
 
     numberWidth = len(str(len(words)))
@@ -844,8 +1124,15 @@ def askWhichWords(words: list[str]) -> list[str] | None:
 def createCard(word: str) -> tuple[Card | None, str]:
     """
     Look up a word and turn it into a card (with a Chinese translation if the AI tutor
-    is set up).
-    Returns (card, "") or (None, reason it was skipped).
+    is set up). A failed translation is not a problem: the card just has none.
+
+    Parameters:
+        Mandatory:
+            - word (str): The word to look up.
+    Returns:
+        tuple[Card | None, str]: (card, "") when the word was found, or (None, reason)
+        when it was skipped. The reason is short text for the progress line: "not
+        found in the dictionary" or "could not reach the dictionary (...)".
     """
 
     try:
@@ -877,7 +1164,22 @@ def addWords(
     """
     Look up each word and add it to the deck, showing progress line by line.
     The deck is saved after every word, so nothing is lost if the user stops.
-    Returns {"added": int, "skipped": int}.
+    If the deck file cannot be written, that word is taken out again and the import
+    stops.
+
+    Parameters:
+        Mandatory:
+            - words (list[str]): The words to add (at least one).
+            - cards (list[Card]): The deck. It is changed in place.
+            - deckPath (str): The deck file.
+        Optional:
+            - translations (dict[str, str] | None): {word in lowercase: translation},
+              e.g. from the Chinese column of a CSV file (see readCSVTranslations). A
+              translation found here wins over the AI tutor's.
+              Default: None (no translations given).
+    Returns:
+        dict: {"added": int, "skipped": int}: how many words were added, and how many
+        were skipped (not found, already in the deck, or not saved).
     """
 
     summary = {"added": 0, "skipped": 0}
@@ -938,8 +1240,16 @@ def addWords(
 def chooseWordsWithAI(text: str, words: list[str]) -> list[str]:
     """
     If the AI tutor is set up and the text is a passage, offer to let it pick the most
-    useful words.
-    Falls back to the words found without AI if it fails.
+    useful words. Falls back to the words found without AI if it fails.
+
+    Parameters:
+        Mandatory:
+            - text (str): The text of the file.
+            - words (list[str]): The words found without AI (see extractWords).
+    Returns:
+        list[str]: The words the AI tutor picked, or the given words unchanged when the
+        tutor is not set up, the text is a word list, the user says no, the tutor
+        cannot be reached, or it picks nothing.
     """
 
     if not genAITutor.isAIAvailable() or looksLikeWordList(text):
@@ -974,8 +1284,15 @@ def chooseWordsWithAI(text: str, words: list[str]) -> list[str]:
 
 def importVocabulary(cards: list[Card], deckPath: str) -> None:
     """
-    Ask for a file, find the vocabulary in it, let the user choose words, and add them
-    to the deck.
+    The "Import words from a file" screen: ask for a file, find the vocabulary in it,
+    let the user choose words, and add them to the deck.
+    Words already in the deck are hidden, and at most MAX_IMPORT_WORDS (100) words are
+    offered at once. Enter (or q) at the file question goes back to the main menu.
+
+    Parameters:
+        Mandatory:
+            - cards (list[Card]): The deck. It is changed in place.
+            - deckPath (str): The deck file, saved after every added word.
     """
 
     print(

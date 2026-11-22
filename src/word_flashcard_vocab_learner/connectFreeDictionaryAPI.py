@@ -81,7 +81,22 @@ def getWordDefinition(
 def fetchEntries(word: str, dictionaryURL: str, query: str, timeout: float) -> list:
     """
     Request one spelling from the API and return its entries.
-    Returns an empty list if the word is not found.
+    The request goes through the shared session, so repeated lookups reuse the
+    connection.
+
+    Parameters:
+        Mandatory:
+            - word (str): The exact spelling to look up. It is URL-encoded, so spaces
+              and "/" are safe ("ice cream" -> "ice%20cream").
+            - dictionaryURL (str): The base URL of the API, ending with "/".
+            - query (str): Text added after the word, e.g. "?key=value", or "".
+            - timeout (float): How many seconds to wait for the answer.
+    Returns:
+        list: The "entries" list of the API's answer. An empty list when the word is
+        not found (HTTP 404) or the answer has no entries.
+    Raises:
+        requests.RequestException: When the API cannot be reached (no internet, a
+        timeout) or answers with an error other than 404, e.g. HTTP 500.
     """
 
     response = session.get(
@@ -101,6 +116,16 @@ def collectDefinitionsAndExamples(entries: list) -> tuple[list[str], list[list[s
     """
     Collect every definition and its example sentences from the entries,
     including sub-senses. The two lists line up: examples[i] belongs to definitions[i].
+
+    Parameters:
+        Mandatory:
+            - entries (list): The "entries" list of the API's answer. Each entry has
+              "senses"; each sense may have a "definition", "examples" and
+              "subsenses" (which look like senses).
+    Returns:
+        tuple[list[str], list[list[str]]]: (definitions, examples), in the order they
+        appear: each sense comes before its sub-senses. A sense without a definition is
+        skipped, and a definition without examples gets an empty list.
     """
 
     definitions = []
@@ -119,7 +144,16 @@ def collectDefinitionsAndExamples(entries: list) -> tuple[list[str], list[list[s
 def caseVariants(word: str) -> list[str]:
     """
     Spellings to try, in order, without duplicates: as typed, lowercase, capitalized.
-    Example: "jason" -> ["jason", "Jason"]
+    The dictionary API is case-sensitive, so a name typed in lowercase is only found
+    with a capital letter.
+    Example: "jason" -> ["jason", "Jason"], "BOOK" -> ["BOOK", "book", "Book"]
+
+    Parameters:
+        Mandatory:
+            - word (str): The word as the user typed it.
+    Returns:
+        list[str]: One to three spellings; a spelling that is the same as an earlier
+        one is left out.
     """
 
     return list(dict.fromkeys([word, word.lower(), word.capitalize()]))
@@ -138,6 +172,16 @@ def formatWordDefinition(result: dict) -> str:
              > The cat sat on the mat.
 
           2. A person.
+
+    Parameters:
+        Mandatory:
+            - result (dict): {"word": str, "definitions": list[str], "examples":
+              list[list[str]]}, as returned by getWordDefinition. A card's word,
+              definitions and examples can be shown the same way; examples may have
+              fewer lists than there are definitions.
+    Returns:
+        str: The text to print, in color when colors are on. When there are no
+        definitions: 'No definition found for "<word>".'
     """
 
     word = result["word"]
@@ -179,6 +223,20 @@ def formatWordDefinition(result: dict) -> str:
 
 
 def sendWordDefinition(word: str) -> str:
+    """
+    Look up a word and format the result in one step (getWordDefinition, then
+    formatWordDefinition), with the default settings.
+
+    Parameters:
+        Mandatory:
+            - word (str): The word to look up.
+    Returns:
+        str: The formatted definitions, or the "No definition found" message.
+    Raises:
+        ValueError: When the word is empty.
+        requests.RequestException: When the dictionary cannot be reached.
+    """
+
     return formatWordDefinition(getWordDefinition(word))
 
 

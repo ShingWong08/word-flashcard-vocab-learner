@@ -107,8 +107,20 @@ class ChatColor:
     @classmethod
     def paint(cls, text: object, *styles: str) -> str:
         """
-        Wrap text in the given styles and reset the style afterwards.
+        Wrap text in the given styles and reset the style afterwards, so the color does
+        not leak into the text printed after it.
         Example: ChatColor.paint("Done!", ChatColor.BOLD, ChatColor.GREEN)
+
+        Parameters:
+            Mandatory:
+                - text (object): What to show. Anything that is not a string (a number,
+                  None, ...) is turned into one with str().
+            Optional:
+                - styles (str): Any number of ChatColor codes, e.g. ChatColor.BOLD and
+                  ChatColor.RED, applied in the order given. Default: none.
+        Returns:
+            str: The text between the style codes and ChatColor.RESET. Just the plain
+            text when no style is given or when colors are turned off (see isEnabled).
         """
 
         if not styles or not cls.isEnabled():

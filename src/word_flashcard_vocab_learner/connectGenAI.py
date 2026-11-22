@@ -11,6 +11,15 @@ def _client(baseURL: str, apiKey: str) -> "OpenAI":
     """
     One client per API address and key. Reusing it keeps the connection open,
     so translating many words in a row does not start a new HTTPS connection each time.
+    The result is cached (functools.cache): the same address and key always give back
+    the same client.
+
+    Parameters:
+        Mandatory:
+            - baseURL (str): The base URL of the OpenAI-compatible API.
+            - apiKey (str): The API key.
+    Returns:
+        OpenAI: The client for that address and key.
     """
 
     # The openai package takes about a second to import, so it is only loaded
