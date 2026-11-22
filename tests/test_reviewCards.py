@@ -227,13 +227,13 @@ def testUnknownModeRaises():
         reviewCards.reviewCards([makeCard()], "dancing")
 
 
-def testAvailableModes(monkeypatch):
+def testAvailableModes(monkeypatch, request):
     assert reviewCards.availableModes() == [
         reviewCards.MODE_MEANING,
         reviewCards.MODE_SPELLING,
     ]
 
-    monkeypatch.setenv("LLM_API_KEY", "test")
+    request.getfixturevalue("enableAI")
     monkeypatch.setattr(speechHelper, "isSpeechAvailable", lambda: True)
 
     assert reviewCards.availableModes() == [

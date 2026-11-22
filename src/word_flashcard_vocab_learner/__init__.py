@@ -351,8 +351,9 @@ def lookUpTranslation(result: dict) -> str:
         Mandatory:
             - result (dict): The dictionary result (see getWordDefinition).
     Returns:
-        str: The translation. "" if the AI tutor is not set up (no LLM_API_KEY), or if
-        it fails (the problem is then printed in orange).
+        str: The translation. "" if the AI tutor is not set up (an LLM_* setting
+        is missing, see genAITutor.TUTOR_SETTINGS), or if it fails (the problem is
+        then printed in orange).
     """
 
     if not genAITutor.isAIAvailable():
@@ -557,8 +558,9 @@ def askReviewMode() -> str | None:
             "Listening, Speaking: set ELEVENLABS_API_KEY and run  "
             'pip install ".[speech]"'
         )
-    if not genAITutor.isAIAvailable():
-        missingModes.append("Sentence: set LLM_API_KEY")
+    missingAI = genAITutor.missingAISettings()
+    if missingAI:
+        missingModes.append(f"Sentence: set {', '.join(missingAI)} in .env")
 
     if missingModes:
         print()

@@ -10,6 +10,15 @@ MAX_TRANSLATION_LENGTH = 40
 MAX_TEXT_FOR_AI = 12000
 DEFAULT_VOCABULARY_COUNT = 20
 
+# The .env variables connectGenAI reads for the tutor's calls (see missingAISettings).
+TUTOR_SETTINGS = (
+    "LLM_API_KEY",
+    "LLM_BASE_URL",
+    "LLM_MODEL",
+    "LLM_TOP_P",
+    "LLM_MAX_TOKENS",
+)
+
 TRANSLATION_SYSTEM_MESSAGE = (
     "You are an English-Chinese dictionary for Hong Kong secondary school students. "
     "Translate the English word into Traditional Chinese, using the meaning given. "
@@ -58,13 +67,27 @@ LIST_MARKER = re.compile(r"^\s*(\d+\s*[.)]|[-*•])\s*")
 EXPLANATION = re.compile(r"\s+[-–—:]\s+|[(:：]")
 
 
-def isAIAvailable() -> bool:
+def missingAISettings() -> list[str]:
     """
-    Return True when LLM_API_KEY is set, so translation and sentence feedback can be
-    used.
+    List the .env variables the AI tutor still needs. connectGenAI has no defaults,
+    and the tutor passes only its own system message and temperature, so every
+    setting in TUTOR_SETTINGS must be filled in.
+
+    Returns:
+        list[str]: The missing or blank variables, in TUTOR_SETTINGS order. Empty
+        when the tutor is ready.
     """
 
-    return bool(os.environ.get("LLM_API_KEY"))
+    return [name for name in TUTOR_SETTINGS if os.environ.get(name, "").strip() == ""]
+
+
+def isAIAvailable() -> bool:
+    """
+    Return True when every setting in TUTOR_SETTINGS is set, so translation and
+    sentence feedback can be used.
+    """
+
+    return not missingAISettings()
 
 
 def stripThinking(text: str) -> str:

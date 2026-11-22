@@ -5,6 +5,30 @@ import pytest
 
 from word_flashcard_vocab_learner import cardDeck
 
+# Every LLM_* variable, with a fake value that enableAI fills in.
+LLM_TEST_SETTINGS = {
+    "LLM_API_KEY": "test",
+    "LLM_BASE_URL": "https://example.test/v1",
+    "LLM_MODEL": "test-model",
+    "LLM_SYSTEM_MESSAGE": "Test system message.",
+    "LLM_TEMPERATURE": "0.7",
+    "LLM_TOP_P": "0.9",
+    "LLM_MAX_TOKENS": "500",
+    "LLM_REASONING_EFFORT": "low",
+    "LLM_TIMEOUT": "30",
+}
+
+
+@pytest.fixture
+def enableAI(monkeypatch):
+    """
+    Fill in every LLM_* setting with a fake value, so the AI tutor counts as set up.
+    No real API is called: tests still replace connectGenAI or requests.post.
+    """
+
+    for name, value in LLM_TEST_SETTINGS.items():
+        monkeypatch.setenv(name, value)
+
 
 @pytest.fixture(autouse=True)
 def isolateEnvironment(monkeypatch, tmp_path):
@@ -13,7 +37,8 @@ def isolateEnvironment(monkeypatch, tmp_path):
     cache folders.
     """
 
-    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    for name in LLM_TEST_SETTINGS:
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
     monkeypatch.delenv("TESSERACT_CMD", raising=False)
     monkeypatch.setenv("COLUMNS", "80")

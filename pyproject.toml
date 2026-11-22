@@ -50,7 +50,7 @@ dependencies = [
     # sentence feedback, picking words from a passage). It works with any
     # OpenAI-compatible API, such as the NVIDIA endpoint the code uses by default.
     "openai",
-    # Reads the API keys and settings (LLM_API_KEY, ELEVENLABS_API_KEY, TESSERACT_CMD,
+    # Reads the API keys and settings (LLM_*, ELEVENLABS_API_KEY, TESSERACT_CMD,
     # WORD_FLASHCARD_DECK) from the .env file, so they do not have to be set in the
     # shell every time.
     "python-dotenv",

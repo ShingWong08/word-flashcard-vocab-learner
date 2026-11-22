@@ -125,8 +125,17 @@ def testPickVocabularySendsTheText(monkeypatch):
     assert "A hypothesis is an idea." in sentMessages[0]
 
 
-def testIsAiAvailable(monkeypatch):
+def testIsAiAvailable(monkeypatch, request):
     assert genAITutor.isAIAvailable() is False
+    assert genAITutor.missingAISettings() == list(genAITutor.TUTOR_SETTINGS)
 
     monkeypatch.setenv("LLM_API_KEY", "test")
+    assert genAITutor.isAIAvailable() is False
+    assert "LLM_API_KEY" not in genAITutor.missingAISettings()
+
+    request.getfixturevalue("enableAI")
     assert genAITutor.isAIAvailable() is True
+    assert genAITutor.missingAISettings() == []
+
+    monkeypatch.setenv("LLM_MODEL", "  ")
+    assert genAITutor.missingAISettings() == ["LLM_MODEL"]

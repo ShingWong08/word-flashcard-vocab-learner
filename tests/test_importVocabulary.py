@@ -417,8 +417,7 @@ def testAddWordsSkipsUnknownAndDuplicateWords(monkeypatch, tmp_path, capsys):
     ]
 
 
-def testCreateCardAddsTranslationWhenAiIsSetUp(monkeypatch):
-    monkeypatch.setenv("LLM_API_KEY", "test")
+def testCreateCardAddsTranslationWhenAiIsSetUp(monkeypatch, enableAI):
     monkeypatch.setattr(
         dictionary,
         "getWordDefinition",
@@ -435,7 +434,7 @@ def testCreateCardAddsTranslationWhenAiIsSetUp(monkeypatch):
 
 
 def testRunImportLetsAiPickWordsFromAPassage(
-    monkeypatch, tmp_path, typeAnswers, capsys
+    monkeypatch, tmp_path, typeAnswers, capsys, enableAI
 ):
     passage = tmp_path / "article.txt"
     passage.write_text(
@@ -444,7 +443,6 @@ def testRunImportLetsAiPickWordsFromAPassage(
         encoding="utf-8",
     )
 
-    monkeypatch.setenv("LLM_API_KEY", "test")
     monkeypatch.setattr(
         genAITutor, "pickVocabulary", lambda text: ["ambiguous", "reluctant"]
     )

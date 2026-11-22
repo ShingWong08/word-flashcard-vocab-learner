@@ -1,6 +1,11 @@
-import os
-
 import requests
+
+from word_flashcard_vocab_learner.llmSettings import (
+    chatCompletionsURL,
+    envFloat,
+    envInt,
+    envText,
+)
 
 TUTOR_SYSTEM_MESSAGE = (
     "You are an English vocabulary tutor. "
@@ -10,38 +15,63 @@ TUTOR_SYSTEM_MESSAGE = (
 
 def connectGenAIRequest(
     userMessage: str,
-    baseURL: str = "https://integrate.api.nvidia.com/v1/chat/completions",
+    baseURL: str | None = None,
     apiKey: str | None = None,
-    model: str = "deepseek-ai/deepseek-v4.1-flash",
-    systemMessage: str = TUTOR_SYSTEM_MESSAGE,
-    temperature: float = 1.0,
-    topP: float = 1.0,
-    maxTokens: int = 2000,
-    reasoningEffort: str = "low",
-    timeout: float = 60,
+    model: str | None = None,
+    systemMessage: str | None = None,
+    temperature: float | None = None,
+    topP: float | None = None,
+    maxTokens: int | None = None,
+    reasoningEffort: str | None = None,
+    timeout: float | None = None,
 ) -> str:
     """
     Similar to connectGenAI, but calls the LLM API directly with the 'requests' package
     instead of the OpenAI package.
 
+    There are no built-in defaults. Every optional parameter left as None is read
+    from its LLM_* variable in .env, and a missing variable is an error.
+    An argument you pass always wins over .env.
+
     Parameters:
         Mandatory:
             - userMessage (str): The message to send to the AI model.
-        Optional:
-            - apiKey (str): LLM API key. Falls back to the LLM_API_KEY environment
-              variable.
-            - Other parameters: same meaning as in connectGenAI.
+        Optional (pass it, or set the .env variable after the dash):
+            - baseURL (str): API base URL ("https://host/v1") or the full chat
+              completions endpoint. - LLM_BASE_URL
+            - apiKey (str): LLM API key. - LLM_API_KEY
+            - model (str): The model name. - LLM_MODEL
+            - systemMessage (str): The system message, e.g. TUTOR_SYSTEM_MESSAGE.
+              - LLM_SYSTEM_MESSAGE
+            - temperature (float): Sampling temperature. - LLM_TEMPERATURE
+            - topP (float): Nucleus sampling. - LLM_TOP_P
+            - maxTokens (int): Most tokens in the reply. - LLM_MAX_TOKENS
             - reasoningEffort (str): Reasoning effort hint for the model.
-            - timeout (float): Request timeout in seconds.
+              - LLM_REASONING_EFFORT
+            - timeout (float): Request timeout in seconds. - LLM_TIMEOUT
+    Raises:
+        RuntimeError: A setting is neither passed nor set in .env.
+        ValueError: A numeric LLM_* variable is not a number.
     """
 
     if apiKey is None:
-        apiKey = os.environ.get("LLM_API_KEY")
-
-    if not apiKey:
-        raise RuntimeError(
-            "LLM_API_KEY is not configured. Set it in .env or pass apiKey explicitly."
-        )
+        apiKey = envText("LLM_API_KEY", "apiKey")
+    if baseURL is None:
+        baseURL = envText("LLM_BASE_URL", "baseURL")
+    if model is None:
+        model = envText("LLM_MODEL", "model")
+    if systemMessage is None:
+        systemMessage = envText("LLM_SYSTEM_MESSAGE", "systemMessage")
+    if temperature is None:
+        temperature = envFloat("LLM_TEMPERATURE", "temperature")
+    if topP is None:
+        topP = envFloat("LLM_TOP_P", "topP")
+    if maxTokens is None:
+        maxTokens = envInt("LLM_MAX_TOKENS", "maxTokens")
+    if reasoningEffort is None:
+        reasoningEffort = envText("LLM_REASONING_EFFORT", "reasoningEffort")
+    if timeout is None:
+        timeout = envFloat("LLM_TIMEOUT", "timeout")
 
     payload = {
         "model": model,
@@ -58,7 +88,7 @@ def connectGenAIRequest(
     }
 
     response = requests.post(
-        baseURL,
+        chatCompletionsURL(baseURL),
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {apiKey}",

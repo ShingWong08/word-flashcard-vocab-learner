@@ -17,7 +17,7 @@ pronunciation and the Listening and Speaking modes.
 | Spelling | Read the definitions (word hidden), the translation and a hint, then type the word | Nothing extra |
 | Listening | Hear the word, then type it | Speech |
 | Speaking | Read the clues, then say the word into the microphone | Speech |
-| Sentence | Write a sentence with the word and get feedback from the AI tutor | `LLM_API_KEY` |
+| Sentence | Write a sentence with the word and get feedback from the AI tutor | `LLM_*` settings |
 
 ## Requirements
 
@@ -56,15 +56,37 @@ commit it.
 
 | Variable | Used by |
 | --- | --- |
-| `LLM_API_KEY` | Chinese translations, sentence feedback and picking words from a passage (`genAITutor`, via `connectGenAI`) |
+| `LLM_API_KEY` and the other `LLM_*` settings below | Chinese translations, sentence feedback and picking words from a passage (`genAITutor`, via `connectGenAI`) |
 | `ELEVENLABS_API_KEY` | Pronunciation, Listening and Speaking modes (`textToSpeech`, `speechToText`) |
 | `WORD_FLASHCARD_DECK` | Optional. Where the deck is saved. Default: `~/.word_flashcard/deck.json`. A leading `~` is expanded |
 | `TESSERACT_CMD` | Optional. Full path of `tesseract.exe` if Tesseract OCR is not on your `PATH` |
 
-The LLM calls go to NVIDIA's OpenAI-compatible endpoint
-(`https://integrate.api.nvidia.com/v1`) with the model `deepseek-ai/deepseek-v4.1-flash`,
-so `LLM_API_KEY` should be an NVIDIA API key. To use another provider, change the
-`baseURL` and `model` defaults in `connectGenAI.py`; any OpenAI-compatible API works.
+The LLM settings have no defaults in the code: each one must be set in `.env` (or
+passed as an argument, which always wins over `.env`). A missing one raises
+`RuntimeError: LLM_... is not configured`. Any OpenAI-compatible API works;
+`.env.example` has working values for NVIDIA (`https://build.nvidia.com`, keys start
+with `nvapi-`).
+
+| Variable | Example | Used by |
+| --- | --- | --- |
+| `LLM_BASE_URL` | `https://integrate.api.nvidia.com/v1` | both clients (a full `.../chat/completions` URL also works) |
+| `LLM_MODEL` | `minimaxai/minimax-m3.1-flash` | both clients |
+| `LLM_SYSTEM_MESSAGE` | `You are an AI assistant.` | both clients |
+| `LLM_TEMPERATURE` | `1.0` | both clients |
+| `LLM_TOP_P` | `1.0` | both clients |
+| `LLM_MAX_TOKENS` | `2000` | both clients |
+| `LLM_REASONING_EFFORT` | `low` | `connectGenAIRequest` |
+| `LLM_TIMEOUT` | `60` (seconds) | `connectGenAIRequest` |
+
+The AI tutor (`genAITutor`) passes its own system message and temperature, so it needs
+`LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`, `LLM_TOP_P` and `LLM_MAX_TOKENS`. Until all
+five are set, the Sentence mode and the translations stay off, and the start menu lists
+the missing ones.
+
+Providers retire models: if a call fails with `410 Gone`, pick a current model from
+`https://integrate.api.nvidia.com/v1/models` (or your provider's list) and update
+`LLM_MODEL`. A `401 Unauthorized` from NVIDIA means the key is not an NVIDIA key (for
+example the `YOUR_LLM_API_KEY` placeholder); a wrong `nvapi-` key gives `403`.
 
 ## Usage
 
@@ -170,8 +192,9 @@ as `Unit 3 vocabulary` are skipped, and so is a line that reads like prose (it e
 A passage is an article, a story or a page of notes. The app takes the less common words
 and skips names, words shorter than 3 letters, and very common words along with their
 forms (`showed`, `making`). Markdown front matter (`--- … ---`), links and e-mail
-addresses are removed before it starts, so none of them turn up as words. If
-`LLM_API_KEY` is set, you can ask the AI tutor to pick the most useful words instead.
+addresses are removed before it starts, so none of them turn up as words. If the AI
+tutor is set up (the `LLM_*` settings), you can ask it to pick the most useful words
+instead.
 
 A CSV exported from this app has a `Chinese` column, so importing it again brings the
 translations back along with the dictionary meanings. Only words that are not in your

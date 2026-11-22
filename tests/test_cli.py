@@ -49,10 +49,9 @@ def testLookUpWordAndAddItToDeck(monkeypatch, capsys, tmp_path, typeAnswers):
 
 
 def testTranslationIsShownAndSavedWhenAiIsSetUp(
-    monkeypatch, capsys, tmp_path, typeAnswers
+    monkeypatch, capsys, tmp_path, typeAnswers, enableAI
 ):
     fakeLookup(monkeypatch)
-    monkeypatch.setenv("LLM_API_KEY", "test")
     monkeypatch.setattr(genAITutor, "translateWord", lambda word, definition: "貓")
     typeAnswers(["1", "cat", "y", "", "q"])
 
