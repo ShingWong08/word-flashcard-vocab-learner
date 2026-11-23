@@ -1,3 +1,4 @@
+import os
 from functools import cache
 from typing import TYPE_CHECKING
 
@@ -5,6 +6,10 @@ from word_flashcard_vocab_learner.llmSettings import envFloat, envInt, envText
 
 if TYPE_CHECKING:
     from openai import OpenAI
+
+# The openai package retries a failed request twice by default, and waits up to 10
+# minutes for each answer. One retry is enough; LLM_TIMEOUT sets the wait.
+MAX_RETRIES = 1
 
 
 @cache
@@ -27,7 +32,7 @@ def _client(baseURL: str, apiKey: str) -> "OpenAI":
     # the first time the AI tutor is used, not every time the app starts.
     from openai import OpenAI
 
-    return OpenAI(base_url=baseURL, api_key=apiKey)
+    return OpenAI(base_url=baseURL, api_key=apiKey, max_retries=MAX_RETRIES)
 
 
 def connectGenAI(
@@ -39,6 +44,7 @@ def connectGenAI(
     temperature: float | None = None,
     topP: float | None = None,
     maxTokens: int | None = None,
+    timeout: float | None = None,
 ) -> str:
     """
     Connect to an OpenAI-compatible LLM API (via the OpenAI package) and return the
@@ -63,6 +69,9 @@ def connectGenAI(
               - LLM_TOP_P
             - maxTokens (int): Maximum number of tokens to generate in the response.
               - LLM_MAX_TOKENS
+            - timeout (float): Seconds to wait for the answer. - LLM_TIMEOUT
+              This one may be left out: without it the openai package's own limit
+              (10 minutes) is used.
     Raises:
         RuntimeError: A setting is neither passed nor set in .env.
         ValueError: A numeric LLM_* variable is not a number.
@@ -82,6 +91,11 @@ def connectGenAI(
         topP = envFloat("LLM_TOP_P", "topP")
     if maxTokens is None:
         maxTokens = envInt("LLM_MAX_TOKENS", "maxTokens")
+    if timeout is None and os.environ.get("LLM_TIMEOUT", "").strip() != "":
+        timeout = envFloat("LLM_TIMEOUT", "timeout")
+
+    # Only passed when set, so the openai package's own default stays in place.
+    extraOptions = {} if timeout is None else {"timeout": timeout}
 
     response = _client(baseURL, apiKey).chat.completions.create(
         model=model,
@@ -92,6 +106,7 @@ def connectGenAI(
         temperature=temperature,
         top_p=topP,
         max_tokens=maxTokens,
+        **extraOptions,
     )
 
     return response.choices[0].message.content or ""

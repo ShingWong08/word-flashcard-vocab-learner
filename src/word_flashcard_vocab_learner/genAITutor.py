@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 from word_flashcard_vocab_learner.connectGenAI import connectGenAI
 
@@ -9,6 +10,10 @@ TRANSLATION_CACHE_FILE = "zh-TW.json"
 MAX_TRANSLATION_LENGTH = 40
 MAX_TEXT_FOR_AI = 12000
 DEFAULT_VOCABULARY_COUNT = 20
+# translateWords sends this many words in one request, and runs up to
+# MAX_TRANSLATION_REQUESTS requests at the same time.
+TRANSLATION_BATCH_SIZE = 20
+MAX_TRANSLATION_REQUESTS = 4
 
 # The .env variables connectGenAI reads for the tutor's calls (see missingAISettings).
 TUTOR_SETTINGS = (
@@ -23,6 +28,15 @@ TRANSLATION_SYSTEM_MESSAGE = (
     "You are an English-Chinese dictionary for Hong Kong secondary school students. "
     "Translate the English word into Traditional Chinese, using the meaning given. "
     "Reply with only the Chinese translation (a few words at most), "
+    "with no pinyin, no quotes and no explanation."
+)
+
+BATCH_TRANSLATION_SYSTEM_MESSAGE = (
+    "You are an English-Chinese dictionary for Hong Kong secondary school students. "
+    "The user gives a numbered list of English words, each with the meaning to use. "
+    "Translate every word into Traditional Chinese. "
+    "Reply with one line per word, in the same order, in the form "
+    '"<number>. <Chinese translation>" (a few words at most), '
     "with no pinyin, no quotes and no explanation."
 )
 
@@ -61,6 +75,9 @@ FEEDBACK = re.compile(r"FEEDBACK[\s*:]*(.*)", re.IGNORECASE | re.DOTALL)
 VERDICT_LINE = re.compile(r".*VERDICT.*", re.IGNORECASE)
 # "1. word", "2) word", "- word", "* word", "• word"
 LIST_MARKER = re.compile(r"^\s*(\d+\s*[.)]|[-*•])\s*")
+# One line of a batch translation reply: "3. 挫折", "3) 挫折", "3: 挫折" or "3、挫折"
+# (、 is the Chinese list comma). Markdown bold around the number is allowed.
+NUMBERED_LINE = re.compile(r"^[\s*]*(\d+)[\s*]*[.)、:：][\s*]*(.*)$")
 # The start of an explanation after the word, which is cut off: "word - meaning",
 # "word: meaning", "word (n.)", or "word：meaning" with the full-width colon "：" used
 # in Chinese text.
@@ -219,6 +236,146 @@ def translateWord(
         saveTranslationCache(cache, cachePath)
 
     return translation
+
+
+def parseBatchTranslations(reply: str, words: list[str]) -> dict[str, str]:
+    """
+    Read the numbered translations from the model's reply to a batch request.
+    Example: "1. 挫折\\n2. setbacks: 減少" with words ["setbacks", "diminish"] ->
+    {"setbacks": "挫折", "diminish": "減少"}. The numbers decide which word a line
+    belongs to, and an English word the model repeats before its translation is
+    dropped.
+
+    Parameters:
+        Mandatory:
+            - reply (str): The model's reply, one "<number>. <translation>" line per
+              word.
+            - words (list[str]): The words that were sent, in order (number 1 is
+              words[0]).
+    Returns:
+        dict[str, str]: {word in lowercase: translation}. A word whose line is missing
+        or empty is left out; a number outside the list is ignored.
+    """
+
+    translations = {}
+
+    for eachLine in stripThinking(reply).splitlines():
+        match = NUMBERED_LINE.match(eachLine)
+        if match is None:
+            continue
+
+        index = int(match.group(1)) - 1
+        if not 0 <= index < len(words):
+            continue
+
+        word = words[index]
+        text = match.group(2).strip(" *")
+        # "setbacks: 挫折" or "setbacks - 挫折" -> "挫折"
+        text = re.sub(
+            rf"^{re.escape(word)}\s*[-–—:：=]\s*", "", text, flags=re.IGNORECASE
+        )
+        translation = cleanTranslation(text)
+
+        if translation != "":
+            translations.setdefault(word.strip().lower(), translation)
+
+    return translations
+
+
+def translateBatch(pairs: list[tuple[str, str]]) -> dict[str, str]:
+    """
+    Translate a few words with a single LLM request (see translateWords).
+
+    Parameters:
+        Mandatory:
+            - pairs (list[tuple[str, str]]): (word, definition) for each word.
+    Returns:
+        dict[str, str]: {word in lowercase: translation}, see parseBatchTranslations.
+        Empty when the request fails, so the other batches still count.
+    """
+
+    request = "\n".join(
+        f"{number}. {word} (meaning: {definition or 'any'})"
+        for number, (word, definition) in enumerate(pairs, start=1)
+    )
+
+    try:
+        reply = connectGenAI(
+            request, systemMessage=BATCH_TRANSLATION_SYSTEM_MESSAGE, temperature=0.2
+        )
+    except Exception:
+        return {}
+
+    return parseBatchTranslations(reply, [word for word, _ in pairs])
+
+
+def translateWords(
+    pairs: list[tuple[str, str]],
+    cacheDir: str = TRANSLATION_CACHE_DIR,
+    cacheFile: str = TRANSLATION_CACHE_FILE,
+) -> dict[str, str]:
+    """
+    Translate many English words into Traditional Chinese at once.
+    Words already in the translation cache are not sent again. The others go to the
+    LLM TRANSLATION_BATCH_SIZE (20) at a time, in one request per batch, and up to
+    MAX_TRANSLATION_REQUESTS (4) requests run at the same time. Importing 20 words
+    therefore takes about as long as translating one word with translateWord.
+
+    Parameters:
+        Mandatory:
+            - pairs (list[tuple[str, str]]): (word, English definition) for each word.
+              The definition makes sure the right meaning is translated; it can be "".
+        Optional:
+            - cacheDir (str): Folder for the translation cache.
+            - cacheFile (str): File name of the translation cache.
+    Returns:
+        dict[str, str]: {word in lowercase: translation}. A word the model did not
+        translate, or whose batch failed (e.g. no internet), is left out.
+    """
+
+    cachePath = os.path.join(cacheDir, cacheFile)
+    cache = loadTranslationCache(cachePath)
+
+    translations = {}
+    missing = []
+    seen = set()
+
+    for word, definition in pairs:
+        key = word.strip().lower()
+        if key in cache:
+            translations[key] = cache[key]
+        elif key not in seen:
+            seen.add(key)
+            missing.append((word, definition))
+
+    if not missing:
+        return translations
+
+    batches = [
+        missing[start : start + TRANSLATION_BATCH_SIZE]
+        for start in range(0, len(missing), TRANSLATION_BATCH_SIZE)
+    ]
+
+    with ThreadPoolExecutor(
+        max_workers=min(MAX_TRANSLATION_REQUESTS, len(batches))
+    ) as pool:
+        results = list(pool.map(translateBatch, batches))
+
+    newTranslations = {}
+    for eachResult in results:
+        newTranslations.update(eachResult)
+
+    if newTranslations:
+        translations.update(newTranslations)
+        cache.update(newTranslations)
+        try:
+            saveTranslationCache(cache, cachePath)
+        except OSError:
+            # The translations still go on the cards; they are just asked for again
+            # next time.
+            pass
+
+    return translations
 
 
 def parseSentenceFeedback(reply: str) -> tuple[bool | None, str]:

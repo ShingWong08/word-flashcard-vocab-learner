@@ -5,6 +5,7 @@ import locale
 import os
 import re
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 
@@ -43,6 +44,8 @@ TRANSLATION_HEADERS = [
 WORD_HEADERS = ["word", "words", "english", "vocabulary", "单词", "單詞", "英文"]
 
 MAX_IMPORT_WORDS = 100
+# How many dictionary lookups addWords runs at the same time.
+MAX_LOOKUP_REQUESTS = 8
 # "cat" and "dog" are vocabulary too; very common words are filtered by COMMON_WORDS.
 MIN_PASSAGE_WORD_LENGTH = 3
 # A page with less text than this is treated as a scanned page.
@@ -1121,18 +1124,18 @@ def askWhichWords(words: list[str]) -> list[str] | None:
 # ---------- Adding words to the deck ----------
 
 
-def createCard(word: str) -> tuple[Card | None, str]:
+def lookUpWord(word: str) -> tuple[dict | None, str]:
     """
-    Look up a word and turn it into a card (with a Chinese translation if the AI tutor
-    is set up). A failed translation is not a problem: the card just has none.
+    Look up one word in the dictionary for addWords.
 
     Parameters:
         Mandatory:
             - word (str): The word to look up.
     Returns:
-        tuple[Card | None, str]: (card, "") when the word was found, or (None, reason)
-        when it was skipped. The reason is short text for the progress line: "not
-        found in the dictionary" or "could not reach the dictionary (...)".
+        tuple[dict | None, str]: (result, "") when the word was found (see
+        getWordDefinition), or (None, reason) when it is skipped. The reason is short
+        text for the progress line: "not found in the dictionary" or "could not reach
+        the dictionary (...)".
     """
 
     try:
@@ -1143,16 +1146,24 @@ def createCard(word: str) -> tuple[Card | None, str]:
     if not result["definitions"]:
         return None, "not found in the dictionary"
 
-    translation = ""
-    if genAITutor.isAIAvailable():
-        try:
-            translation = genAITutor.translateWord(
-                result["word"], result["definitions"][0]
-            )
-        except Exception:
-            translation = ""
+    return result, ""
 
-    return Card.fromLookup(result, translation), ""
+
+def lookUpWords(words: list[str]) -> list[tuple[dict | None, str]]:
+    """
+    Look up many words at the same time, MAX_LOOKUP_REQUESTS (8) at once. Each lookup
+    mostly waits for the network, so this is much faster than one after another.
+
+    Parameters:
+        Mandatory:
+            - words (list[str]): The words to look up (at least one).
+    Returns:
+        list[tuple[dict | None, str]]: One (result, reason) per word, in the same
+        order as words (see lookUpWord).
+    """
+
+    with ThreadPoolExecutor(max_workers=min(MAX_LOOKUP_REQUESTS, len(words))) as pool:
+        return list(pool.map(lookUpWord, words))
 
 
 def addWords(
@@ -1162,10 +1173,14 @@ def addWords(
     translations: dict[str, str] | None = None,
 ) -> dict:
     """
-    Look up each word and add it to the deck, showing progress line by line.
-    The deck is saved after every word, so nothing is lost if the user stops.
-    If the deck file cannot be written, that word is taken out again and the import
-    stops.
+    Look up the words and add them to the deck, then show one line per word.
+    It works in three steps, so a long list does not take one network round trip
+    after another for every word:
+        1. all words are looked up in the dictionary at the same time (lookUpWords);
+        2. if the AI tutor is set up, the new words that have no translation yet are
+           translated together in a few requests (genAITutor.translateWords);
+        3. the cards are added and the deck is saved once.
+    If the deck file cannot be written, none of the new cards are kept.
 
     Parameters:
         Mandatory:
@@ -1175,61 +1190,107 @@ def addWords(
         Optional:
             - translations (dict[str, str] | None): {word in lowercase: translation},
               e.g. from the Chinese column of a CSV file (see readCSVTranslations). A
-              translation found here wins over the AI tutor's.
+              translation found here wins over the AI tutor's, and such words are not
+              sent to the AI tutor.
               Default: None (no translations given).
     Returns:
         dict: {"added": int, "skipped": int}: how many words were added, and how many
         were skipped (not found, already in the deck, or not saved).
     """
 
+    translations = translations or {}
     summary = {"added": 0, "skipped": 0}
-    wordWidth = max(map(len, words))
-    counterWidth = len(str(len(words)))
 
-    for index, eachWord in enumerate(words, start=1):
-        counter = ChatColor.paint(
-            f"  [{index:>{counterWidth}}/{len(words)}] ", ChatColor.DARK_GRAY
+    print(
+        ChatColor.paint(
+            f"Looking up {len(words)} words in the dictionary...", ChatColor.BLUE
         )
-        start = counter + f"{eachWord:<{wordWidth}}  "
+    )
+    lookups = lookUpWords(words)
 
-        card, reason = createCard(eachWord)
+    # Only new words without a translation of their own go to the AI tutor.
+    toTranslate = [
+        (result["word"], result["definitions"][0])
+        for result, _ in lookups
+        if result is not None
+        and result["word"].casefold() not in translations
+        and cardDeck.findCard(cards, result["word"]) is None
+    ]
 
-        if card is None:
-            summary["skipped"] += 1
-            print(start + ChatColor.paint(f"skipped: {reason}", ChatColor.ORANGE))
+    aiTranslations = {}
+    if toTranslate and genAITutor.isAIAvailable():
+        print(
+            ChatColor.paint(
+                f"Translating {len(toTranslate)} words with the AI tutor...",
+                ChatColor.BLUE,
+            )
+        )
+        aiTranslations = genAITutor.translateWords(toTranslate)
+
+    # (word typed, new card or None, why it was skipped, color of that reason)
+    rows = []
+    for eachWord, (result, reason) in zip(words, lookups):
+        if result is None:
+            rows.append((eachWord, None, reason, ChatColor.ORANGE))
             continue
 
-        # A translation column in the user's own CSV wins over the AI tutor.
-        if translations is not None:
-            translation = translations.get(card.word.casefold(), "")
-            if translation != "":
-                card.translation = translation
+        translation = translations.get(result["word"].casefold(), "")
+        if translation == "":
+            translation = aiTranslations.get(result["word"].strip().lower(), "")
+
+        card = Card.fromLookup(result, translation)
 
         if not cardDeck.addCard(cards, card):
-            summary["skipped"] += 1
-            print(
-                start
-                + ChatColor.paint(
-                    f'skipped: "{card.word}" is already in your deck',
+            rows.append(
+                (
+                    eachWord,
+                    None,
+                    f'"{card.word}" is already in your deck',
                     ChatColor.DARK_GRAY,
                 )
             )
             continue
 
+        rows.append((eachWord, card, "", ""))
+
+    newCards = [eachCard for _, eachCard, _, _ in rows if eachCard is not None]
+    saveError = None
+
+    if newCards:
         try:
             cardDeck.saveDeck(cards, deckPath)
         except cardDeck.DeckSaveError as error:
-            print(start + ChatColor.paint(f"skipped: {error}", ChatColor.RED))
+            saveError = error
+            for eachCard in newCards:
+                cards.remove(eachCard)
+
+    wordWidth = max(map(len, words))
+    counterWidth = len(str(len(words)))
+
+    for index, (eachWord, card, reason, color) in enumerate(rows, start=1):
+        counter = ChatColor.paint(
+            f"  [{index:>{counterWidth}}/{len(words)}] ", ChatColor.DARK_GRAY
+        )
+        start = counter + f"{eachWord:<{wordWidth}}  "
+
+        if card is None:
             summary["skipped"] += 1
-            cards.remove(card)
-            break
+            print(start + ChatColor.paint(f"skipped: {reason}", color))
+            continue
+
+        if saveError is not None:
+            summary["skipped"] += 1
+            print(start + ChatColor.paint("skipped: not saved", ChatColor.RED))
+            continue
 
         summary["added"] += 1
-
         addedText = ChatColor.paint("added", ChatColor.GREEN)
         if card.translation != "":
             addedText += ChatColor.paint(f"  {card.translation}", ChatColor.DARK_GRAY)
         print(start + addedText)
+
+    if saveError is not None:
+        print(ChatColor.paint(str(saveError), ChatColor.RED))
 
     return summary
 
@@ -1292,7 +1353,7 @@ def importVocabulary(cards: list[Card], deckPath: str) -> None:
     Parameters:
         Mandatory:
             - cards (list[Card]): The deck. It is changed in place.
-            - deckPath (str): The deck file, saved after every added word.
+            - deckPath (str): The deck file, saved once the words are added.
     """
 
     print(

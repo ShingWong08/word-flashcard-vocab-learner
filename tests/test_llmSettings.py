@@ -139,6 +139,13 @@ def testConnectGenAIReadsEnv(monkeypatch, enableAI):
     assert sent["max_tokens"] == 500
     assert sent["temperature"] == 0.2
     assert sent["top_p"] == 0.9
+    assert sent["timeout"] == 30
+
+    # LLM_TIMEOUT may be left out: the openai package's own limit is used then.
+    sent.clear()
+    monkeypatch.delenv("LLM_TIMEOUT")
+    connectGenAI.connectGenAI("hi")
+    assert "timeout" not in sent
 
 
 def testConnectGenAINeedsModel(monkeypatch, enableAI):

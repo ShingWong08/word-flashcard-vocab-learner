@@ -53,6 +53,63 @@ def testEmptyTranslationIsNotCached(monkeypatch, tmp_path):
     assert not (tmp_path / "zh-TW.json").exists()
 
 
+def testParseBatchTranslationsMatchesLinesByNumber():
+    reply = (
+        "<think>Let me translate.</think>\n"
+        "Here you go:\n"
+        "2. diminish: 「減少」\n"
+        "**1.** 挫折\n"
+        "3、\n"
+        "9. 多餘"
+    )
+
+    assert genAITutor.parseBatchTranslations(
+        reply, ["Setbacks", "diminish", "resilience"]
+    ) == {"setbacks": "挫折", "diminish": "減少"}
+
+
+def testTranslateWordsSendsOnlyUncachedWordsInBatches(monkeypatch, tmp_path):
+    (tmp_path / "zh-TW.json").write_text('{"cat": "貓"}', encoding="utf-8")
+    monkeypatch.setattr(genAITutor, "TRANSLATION_BATCH_SIZE", 2)
+    sentMessages = []
+
+    def fakeConnectGenAI(userMessage, **options):
+        sentMessages.append(userMessage)
+        lines = userMessage.splitlines()
+        return "\n".join(f"{number}. 譯{number}" for number in range(1, len(lines) + 1))
+
+    monkeypatch.setattr(genAITutor, "connectGenAI", fakeConnectGenAI)
+
+    translations = genAITutor.translateWords(
+        [("cat", "a pet"), ("dog", "an animal"), ("bird", "it flies"), ("fish", "")],
+        cacheDir=str(tmp_path),
+    )
+
+    assert sorted(sentMessages) == [
+        "1. dog (meaning: an animal)\n2. bird (meaning: it flies)",
+        "1. fish (meaning: any)",
+    ]
+    assert translations == {"cat": "貓", "dog": "譯1", "bird": "譯2", "fish": "譯1"}
+
+    savedCache = json.loads((tmp_path / "zh-TW.json").read_text(encoding="utf-8"))
+    assert savedCache == translations
+
+
+def testTranslateWordsKeepsOtherBatchesWhenOneFails(monkeypatch, tmp_path):
+    monkeypatch.setattr(genAITutor, "TRANSLATION_BATCH_SIZE", 1)
+
+    def fakeConnectGenAI(userMessage, **options):
+        if "dog" in userMessage:
+            raise ConnectionError("offline")
+        return "1. 貓"
+
+    monkeypatch.setattr(genAITutor, "connectGenAI", fakeConnectGenAI)
+
+    assert genAITutor.translateWords(
+        [("cat", "a pet"), ("dog", "an animal")], cacheDir=str(tmp_path)
+    ) == {"cat": "貓"}
+
+
 @pytest.mark.parametrize(
     "reply, expected",
     [

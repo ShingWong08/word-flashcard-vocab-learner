@@ -417,20 +417,83 @@ def testAddWordsSkipsUnknownAndDuplicateWords(monkeypatch, tmp_path, capsys):
     ]
 
 
-def testCreateCardAddsTranslationWhenAiIsSetUp(monkeypatch, enableAI):
+def testAddWordsTranslatesNewWordsInOneBatch(monkeypatch, tmp_path, enableAI):
     monkeypatch.setattr(
         dictionary,
         "getWordDefinition",
-        lambda word: {"word": word, "definitions": ["unclear"], "examples": [[]]},
+        lambda word: {
+            "word": word,
+            "definitions": [f"{word} meaning"],
+            "examples": [[]],
+        },
     )
+    batches = []
+
+    def fakeTranslateWords(pairs):
+        batches.append(pairs)
+        return {"ambiguous": "含糊不清"}
+
+    monkeypatch.setattr(genAITutor, "translateWords", fakeTranslateWords)
+    cards = [Card("cat", ["a pet"])]
+
+    summary = importVocabulary.addWords(
+        ["ambiguous", "reluctant", "cat"],
+        cards,
+        str(tmp_path / "deck.json"),
+        translations={"reluctant": "不情願"},
+    )
+
+    # One call, without the word that has a CSV translation or is already known.
+    assert batches == [[("ambiguous", "ambiguous meaning")]]
+    assert summary == {"added": 2, "skipped": 1}
+    assert {eachCard.word: eachCard.translation for eachCard in cards} == {
+        "cat": "",
+        "ambiguous": "含糊不清",
+        "reluctant": "不情願",
+    }
+
+
+def testAddWordsLooksUpWordsAtTheSameTime(monkeypatch, tmp_path):
+    import threading
+
+    # Every lookup waits until 3 lookups are running: one after another, this would
+    # time out.
+    barrier = threading.Barrier(3, timeout=5)
+
+    def fakeGetWordDefinition(word):
+        barrier.wait()
+        return {"word": word, "definitions": ["x"], "examples": [[]]}
+
+    monkeypatch.setattr(dictionary, "getWordDefinition", fakeGetWordDefinition)
+    cards = []
+
+    summary = importVocabulary.addWords(
+        ["one", "two", "three"], cards, str(tmp_path / "deck.json")
+    )
+
+    assert summary == {"added": 3, "skipped": 0}
+    # The cards keep the order of the list, not the order the lookups finished in.
+    assert [eachCard.word for eachCard in cards] == ["one", "two", "three"]
+
+
+def testAddWordsKeepsNothingWhenTheDeckCannotBeSaved(
+    monkeypatch, tmp_path, makeDeckFolderReadOnly, capsys
+):
     monkeypatch.setattr(
-        genAITutor, "translateWord", lambda word, definition: "含糊不清"
+        dictionary,
+        "getWordDefinition",
+        lambda word: {"word": word, "definitions": ["x"], "examples": [[]]},
+    )
+    makeDeckFolderReadOnly()
+    cards = [Card("cat", ["a pet"])]
+
+    summary = importVocabulary.addWords(
+        ["dog", "bird"], cards, str(tmp_path / "deck.json")
     )
 
-    card, reason = importVocabulary.createCard("ambiguous")
-
-    assert reason == ""
-    assert card.translation == "含糊不清"
+    assert summary == {"added": 0, "skipped": 2}
+    assert [eachCard.word for eachCard in cards] == ["cat"]
+    assert "cannot be written" in capsys.readouterr().out
 
 
 def testRunImportLetsAiPickWordsFromAPassage(
@@ -446,7 +509,7 @@ def testRunImportLetsAiPickWordsFromAPassage(
     monkeypatch.setattr(
         genAITutor, "pickVocabulary", lambda text: ["ambiguous", "reluctant"]
     )
-    monkeypatch.setattr(genAITutor, "translateWord", lambda word, definition: "")
+    monkeypatch.setattr(genAITutor, "translateWords", lambda pairs: {})
     monkeypatch.setattr(
         dictionary,
         "getWordDefinition",
